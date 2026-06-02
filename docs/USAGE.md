@@ -22,13 +22,19 @@ Repository caches are stored under:
 ~/.config/cfgraft/repos/
 ```
 
-Machine-managed sync state is stored separately from config:
+Machine-managed sync state is stored separately from config under:
 
 ```text
-~/.config/cfgraft/state.yaml
+~/.config/cfgraft/state/
 ```
 
-Do not edit `state.yaml` by hand. Hashes are intentionally kept out of `config.yaml` so the config remains the user-owned source of truth.
+Each configured source gets its own state file named after the source ID, such as:
+
+```text
+~/.config/cfgraft/state/home.yaml
+```
+
+Older `~/.config/cfgraft/state.yaml` files are still read for compatibility and are removed after the next successful split-state write. Do not edit state files by hand. Hashes are intentionally kept out of `config.yaml` so the config remains the user-owned source of truth.
 
 ## Configuration
 
@@ -49,6 +55,8 @@ sources:
 ```
 
 Each source has a repository URL, a ref, and one or more mappings. Ref types are `branch`, `tag`, or `commit`.
+
+When sources are added through the TUI, the source ID is derived from the repository URL. For example, `git@github.com:example/dotfiles.git` becomes `dotfiles`. If that ID already exists, `cfgraft` appends a numeric suffix.
 
 Targets must be absolute paths. `cfgraft` does not expand `~`, `$HOME`, or other environment variables in target paths. Destination mappings must not overlap; for example, mapping both `/Users/jared/.config` and `/Users/jared/.config/nvim` is rejected.
 
@@ -72,9 +80,9 @@ cfgraft sync
 
 Repository caches under `~/.config/cfgraft/repos/` are disposable application-managed data. Do not use them as workspaces.
 
-After refresh, `sync` plans destination updates. A destination is safe to overwrite when it does not exist, already matches the repository content, or still matches the last hash recorded in `state.yaml`. If an existing destination has no state entry, or if it has drifted from the last accepted hash, it is a conflict.
+After refresh, `sync` plans destination updates. A destination is safe to overwrite when it does not exist, already matches the repository content, or still matches the last hash recorded in state. If an existing destination has no state entry, or if it has drifted from the last accepted hash, it is a conflict.
 
-Successful writes update `state.yaml` with the content hash that `cfgraft` placed or explicitly accepted.
+Successful writes update the source-specific state file with the content hash that `cfgraft` placed or explicitly accepted.
 
 ## Sync Flags
 
@@ -85,6 +93,14 @@ Successful writes update `state.yaml` with the content hash that `cfgraft` place
 `--interactive` prompts for each conflict before overwriting. If any conflict is declined, sync stops without writing.
 
 `--verbose` shows repository refresh details and no-op decisions.
+
+## Color Output
+
+`cfgraft` uses color and styling for human-readable CLI output and the TUI. Set `NO_COLOR` to any value to disable colored/styled output:
+
+```text
+NO_COLOR=1 cfgraft sync --dry-run
+```
 
 ## Directory Mappings
 
@@ -138,10 +154,10 @@ If state entries remain for mappings that are no longer referenced by active con
 
 Running `cfgraft` without a subcommand launches a Bubble Tea terminal UI for managing `config.yaml` and running targeted sync operations.
 
-The TUI supports:
+The TUI uses Bubble Tea v2 with an ASCII `cfgraft` header, breadcrumbs, top action bars, hover highlighting, styled selections, and colored status/error output. It supports:
 
 1. Viewing configured sources.
-2. Adding a source with an ID, Git URL, ref type, and ref name.
+2. Adding a source with a Git URL, ref type, and ref name.
 3. Editing an existing source.
 4. Removing a source from config.
 5. Viewing mappings for a selected source.
@@ -153,9 +169,13 @@ The TUI supports:
 11. Diffing all sources.
 12. Diffing one selected source.
 
-Use arrow keys or tab to move through menus, enter to select menu items, and mouse clicks to move the cursor in lists. Forms are saved with `Ctrl+S` and canceled with `Esc`.
+The source list is vertical. Page-level actions such as Add Source, Sync All, and Diff All are shown horizontally across the top. A selected source page shows Edit, Sync, Diff, Remove, Add Mapping, and Back across the top, with mappings listed vertically below. Mouse hover highlights clickable actions and list rows, and mouse clicks activate the highlighted region.
 
-When a source is added or edited, the TUI writes the validated config and immediately checks out the configured repository cache. Mapping changes are written to config after validation; sync is still triggered manually from the selected source menu.
+Keyboard focus moves between the top action bar and the list. Use left/right to move across action buttons, up/down to move through lists, tab to move from the action bar into the list, shift-tab to return to the action bar, and enter to activate the focused item.
+
+Forms use Bubbles text inputs for normal terminal text editing behavior. Use tab/enter to move between fields, `Ctrl+S` to save, and `Esc` to cancel.
+
+When a source is added or edited, the TUI writes the validated config and immediately checks out the configured repository cache. Source IDs are derived from the Git URL rather than entered manually. Mapping changes are written to config after validation; sync is still triggered manually from the selected source menu.
 
 Removing a source or mapping from the TUI removes only the configuration entry. Local destination files are left in place.
 
