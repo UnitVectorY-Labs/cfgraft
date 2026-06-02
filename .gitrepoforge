@@ -1,0 +1,15 @@
+name: cfgraft
+default_branch: main
+config:
+  description: "A small Unix-style TUI and CLI for safely syncing files and directories from Git repositories into local configuration paths."
+  license: MIT
+  language: go
+  release: release-go
+  justfile: true
+  status: active
+  release_github: false
+  codecov:
+    enabled: false
+  docs:
+    enabled: true
+    domain: cfgraft.unitvectorylabs.com
