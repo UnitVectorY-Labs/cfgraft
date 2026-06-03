@@ -96,12 +96,13 @@ const (
 type tuiFormKind string
 
 const (
-	formAddSource    tuiFormKind = "add-source"
-	formEditSource   tuiFormKind = "edit-source"
-	formAddMapping   tuiFormKind = "add-mapping"
-	formEditMapping  tuiFormKind = "edit-mapping"
-	confirmRemoveSrc tuiFormKind = "remove-source"
-	confirmRemoveMap tuiFormKind = "remove-mapping"
+	formAddSource        tuiFormKind = "add-source"
+	formEditSource       tuiFormKind = "edit-source"
+	formAddMapping       tuiFormKind = "add-mapping"
+	formEditMapping      tuiFormKind = "edit-mapping"
+	confirmRemoveSrc     tuiFormKind = "remove-source"
+	confirmRemoveMap     tuiFormKind = "remove-mapping"
+	confirmCreateParents tuiFormKind = "create-parents"
 )
 
 type tuiField struct {
