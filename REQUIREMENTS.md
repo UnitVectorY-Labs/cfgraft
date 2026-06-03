@@ -2,6 +2,32 @@
 
 The implemented and documented behavior has been moved into `docs/USAGE.md`. This file intentionally contains only functionality that is still incomplete or not fully documented.
 
+## TUI Library Upgrade Plan
+
+Research notes:
+
+1. Bubble Tea, Bubbles, and Lip Gloss v2 are already in use. The current TUI still hand-rolls most navigation, list rendering, scrolling, progress, and mouse hit testing.
+2. Bubbles v2 provides the appropriate primitives for this application: `textinput` supports paste and suggestions, `spinner` supports asynchronous progress indicators, `viewport` supports scrollable output, `list` supports selectable/filterable/paged lists, and `filepicker` can be used where direct path browsing is preferable to free-form entry.
+3. BubbleZone can simplify mouse regions for custom controls. Its v2 README notes caveats with the newer Bubble Tea/Lip Gloss compositor, so adopt it after the core Bubbles components are in place and only for custom hit areas that Bubbles components do not already handle.
+
+Implementation order:
+
+1. Migrate selectable source and mapping views to Bubbles list components.
+   - Replace custom paging/highlight bookkeeping with Bubbles list selection state.
+   - Keep mouse selection working through component-native behavior where possible, then add BubbleZone only for remaining custom controls.
+2. Streamline navigation and remove obsolete screens.
+   - Fully remove dead standalone mappings-screen code after all flows use the selected source screen.
+   - Consolidate source detail and mapping management so actions are discoverable from a single source screen.
+   - Keep `Tab`/`Shift+Tab`, arrows, mouse, and shortcuts consistent across screens.
+3. Add mapping state bookkeeping.
+   - Mark newly added or edited mappings dirty until their sync plan has been applied.
+   - Show whether sync will add, update, delete, or remap files for each dirty mapping.
+   - Persist enough state to identify old managed files that need removal after mapping changes.
+4. Add unexpected-file policy for managed folders.
+   - Folder mappings should default to disallowing unrelated files mixed into managed targets.
+   - Add a mapping option to allow mixed files when desired.
+   - Flag unexpected files in managed folders during planning and TUI review.
+
 ## TUI Planned Change Review
 
 The TUI can manage sources and mappings and can trigger syncs one source at a time. It still needs a richer review screen that shows planned changes before a selected sync is applied and lets the user confirm or cancel from inside the TUI.

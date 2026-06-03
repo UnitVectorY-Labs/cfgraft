@@ -63,7 +63,7 @@ func TestTUIMouseHoverAndClickRegions(t *testing.T) {
 		t.Fatalf("expected Add Source action hover, got %q/%d", model.hoverArea, model.hoverIndex)
 	}
 
-	model = model.updateMouseClick(tea.MouseClickMsg{X: 1, Y: model.listStartRow(), Button: tea.MouseLeft})
+	model, _ = model.updateMouseClick(tea.MouseClickMsg{X: 1, Y: model.listStartRow(), Button: tea.MouseLeft})
 	if model.screen != screenSource || model.selectedSource != "home" {
 		t.Fatalf("expected source click to open home, got screen=%s source=%s", model.screen, model.selectedSource)
 	}
@@ -72,7 +72,7 @@ func TestTUIMouseHoverAndClickRegions(t *testing.T) {
 	if model.hoverArea != "list" || model.hoverIndex != 0 {
 		t.Fatalf("expected mapping row hover, got %q/%d", model.hoverArea, model.hoverIndex)
 	}
-	model = model.updateMouseClick(tea.MouseClickMsg{X: 1, Y: model.listStartRow(), Button: tea.MouseLeft})
+	model, _ = model.updateMouseClick(tea.MouseClickMsg{X: 1, Y: model.listStartRow(), Button: tea.MouseLeft})
 	if model.screen != screenForm || model.formKind != formEditMapping {
 		t.Fatalf("expected mapping click to edit mapping, got screen=%s form=%s", model.screen, model.formKind)
 	}
@@ -121,6 +121,13 @@ func TestTUIKeyboardActionAndListNavigation(t *testing.T) {
 	if model.activeArea != "list" || model.cursor != 0 {
 		t.Fatalf("expected tab to focus mapping list, got %s/%d", model.activeArea, model.cursor)
 	}
+	next, _ = model.updateSourceKey("up")
+	model = next.(tuiModel)
+	if model.activeArea != "action" {
+		t.Fatalf("expected up from first list row to return to action bar, got %s", model.activeArea)
+	}
+	next, _ = model.updateSourceKey("tab")
+	model = next.(tuiModel)
 	next, _ = model.updateSourceKey("shift+tab")
 	model = next.(tuiModel)
 	if model.activeArea != "action" {
