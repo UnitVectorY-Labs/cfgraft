@@ -154,7 +154,7 @@ If state entries remain for mappings that are no longer referenced by active con
 
 Running `cfgraft` without a subcommand launches a Bubble Tea terminal UI for managing `config.yaml` and running targeted sync operations.
 
-The TUI uses Bubble Tea v2 with an ASCII `cfgraft` header, breadcrumbs, top action bars, hover highlighting, styled selections, and colored status/error output. It supports:
+The TUI uses Bubble Tea v2 with an ASCII `cfgraft` header, contextual breadcrumbs, Bubbles list/table/text-input components, bottom action buttons, hover highlighting, styled selections, and colored messages/errors. It supports:
 
 1. Viewing configured sources.
 2. Adding a source with a Git URL, ref type, and ref name.
@@ -169,19 +169,19 @@ The TUI uses Bubble Tea v2 with an ASCII `cfgraft` header, breadcrumbs, top acti
 11. Diffing all sources.
 12. Diffing one selected source.
 
-The source list is vertical. Page-level actions such as Add Source, Sync All, and Diff All are shown horizontally across the top. A selected source page shows Edit, Sync, Diff, Remove, Add Mapping, and Back across the top, with mappings listed vertically below. Mouse hover highlights clickable actions and list rows, and mouse clicks activate the highlighted region.
+The source list is vertical and rendered with the Bubbles list component. Page-level actions are shown as bottom buttons such as Add, Sync, and Diff. A selected source page shows source details in a Bubbles table, then the mappings in a separate Bubbles list; if a source has no mappings, the mappings area shows `No Mappings` in muted text. The selected source page exposes Edit, Remove, Add Mapping, Sync, Diff, and Back as bottom buttons. Mouse hover highlights clickable actions and list rows, and mouse clicks move the active selection.
 
-Keyboard focus moves between the top action bar and the list. Use left/right to move across action buttons, down/tab to move from the action bar into the list, up from the first list row or shift-tab to return to the action bar, and enter to activate the focused item. The bottom of each screen renders contextual keyboard help with the Bubbles help component; press `?` to toggle the expanded help view.
+Keyboard focus moves between the primary content and the bottom button bar with tab and shift-tab. Shortcut letters activate immediately from anywhere on the screen: A for Add, S for Sync or Save, D for Diff, E for Edit, R for Remove, and B for Back. Enter activates the selected list row or focused button. The bottom of each screen renders contextual keyboard help with the Bubbles help component; press `?` to toggle the expanded help view.
 
-Forms use Bubbles text inputs for normal terminal text editing behavior, including paste support. Use tab/enter to move between fields, `Ctrl+S` to save, and `Esc` to cancel.
+Forms use Bubbles text inputs for normal terminal text editing behavior, including paste support. On mapping add/edit screens, Enter moves into or out of the active field. While editing a mapping path, up/down selects autocomplete suggestions and tab completes the selected suggestion. Source-path suggestions are relative to the checked-out repository cache and are shown one directory level at a time; target-path suggestions come from the host filesystem after typing a starting path. Use the bottom buttons or shortcut letters to save, add, remove, or go back.
 
-When a source is added or edited, the TUI writes the validated config and checks out the configured repository cache in a background Bubble Tea command. Sync and diff actions also run in the background. While one of these operations is running, the TUI remains responsive and shows a Bubbles spinner with the active operation name.
+When a source is added or edited, the TUI writes the validated config and checks out the configured repository cache in a background Bubble Tea command. Sync and diff actions also run in the background. While one of these operations is running, the TUI shows a modal with a Bubbles spinner and progress bar for the active operation.
 
 Command output is shown in a Bubbles viewport so large sync or diff results remain scrollable instead of running off the bottom of the screen. Pager keys and mouse wheel scrolling work in the output view.
 
 Source IDs are derived from the Git URL rather than entered manually. Mapping changes are written to config after validation; sync is still triggered manually from the selected source menu.
 
-Mapping source and target fields use text input suggestions. Source path suggestions come from the checked-out repository cache, and target path suggestions come from the local filesystem near the path being typed. The source path field shows an inline status: `[ok]` when the file or folder exists in the source cache and `[x]` when it does not. If a mapping target would require new parent folders, the TUI asks for confirmation before saving the mapping.
+Mapping source and target fields use text input suggestions. Source path suggestions come from the checked-out repository cache as repository-relative paths, one directory level at a time, and target path suggestions come from the local filesystem near the path being typed. Mapping forms show a check table above the path fields to indicate whether the source path exists in the source cache. If a mapping target would require new parent folders, the TUI asks for confirmation before saving the mapping.
 
 Removing a source or mapping from the TUI removes only the configuration entry. Local destination files are left in place.
 
