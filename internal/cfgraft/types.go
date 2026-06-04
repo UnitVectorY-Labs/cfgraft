@@ -1,9 +1,14 @@
 package cfgraft
 
 import (
+	"fmt"
+	"io"
 	"io/fs"
 
+	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 const (
@@ -96,16 +101,88 @@ const (
 type tuiFormKind string
 
 const (
-	formAddSource        tuiFormKind = "add-source"
-	formEditSource       tuiFormKind = "edit-source"
-	formAddMapping       tuiFormKind = "add-mapping"
-	formEditMapping      tuiFormKind = "edit-mapping"
-	confirmRemoveSrc     tuiFormKind = "remove-source"
-	confirmRemoveMap     tuiFormKind = "remove-mapping"
-	confirmCreateParents tuiFormKind = "create-parents"
+	formAddSource         tuiFormKind = "add-source"
+	formEditSource        tuiFormKind = "edit-source"
+	formAddMapping        tuiFormKind = "add-mapping"
+	formEditMapping       tuiFormKind = "edit-mapping"
+	confirmRemoveSrc      tuiFormKind = "remove-source"
+	confirmRemoveSrcMaps  tuiFormKind = "remove-source-mappings"
+	confirmRemoveMap      tuiFormKind = "remove-mapping"
+	confirmRemoveMapFiles tuiFormKind = "remove-mapping-files"
+	confirmCreateParents  tuiFormKind = "create-parents"
 )
 
 type tuiField struct {
 	Label string
 	Input textinput.Model
+}
+
+type tuiListItem struct {
+	title string
+	desc  string
+}
+
+func (i tuiListItem) Title() string {
+	return i.title
+}
+
+func (i tuiListItem) Description() string {
+	return i.desc
+}
+
+func (i tuiListItem) FilterValue() string {
+	return i.title
+}
+
+var _ list.DefaultItem = tuiListItem{}
+
+type tuiListDelegate struct{}
+
+func (d tuiListDelegate) Height() int {
+	return 1
+}
+
+func (d tuiListDelegate) Spacing() int {
+	return 0
+}
+
+func (d tuiListDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
+	return nil
+}
+
+func (d tuiListDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	listItem, ok := item.(tuiListItem)
+	if !ok {
+		return
+	}
+	width := max(12, m.Width()-2)
+	title := listItem.Title()
+	if lipgloss.Width(title) > width-3 {
+		title = truncateCells(title, width-4) + "…"
+	}
+	line := "  " + title
+	if index == m.Index() {
+		line = "▶ " + title
+		line = selectedRowStyle.Width(width).Render(line)
+	} else {
+		line = normalRowStyle.Width(width).Render(line)
+	}
+	fmt.Fprint(w, line)
+}
+
+func truncateCells(value string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	var out []rune
+	width := 0
+	for _, r := range value {
+		next := lipgloss.Width(string(r))
+		if width+next > maxWidth {
+			break
+		}
+		out = append(out, r)
+		width += next
+	}
+	return string(out)
 }
