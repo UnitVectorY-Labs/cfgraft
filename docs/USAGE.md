@@ -36,6 +36,36 @@ Each configured source gets its own state file named after the source ID, such a
 
 Older `~/.config/cfgraft/state.yaml` files are still read for compatibility and are removed after the next successful split-state write. Do not edit state files by hand. Hashes are intentionally kept out of `config.yaml` so the config remains the user-owned source of truth.
 
+## Commands
+
+Run `cfgraft` without a subcommand to show top-level help, including available subcommands and global environment flags.
+
+```text
+cfgraft
+```
+
+Each subcommand also supports `--help`:
+
+```text
+cfgraft tui --help
+cfgraft sync --help
+cfgraft diff --help
+cfgraft version --help
+```
+
+Use `tui` for interactive configuration:
+
+```text
+cfgraft tui
+```
+
+Use `sync` and `diff` for scripting and non-interactive workflows:
+
+```text
+cfgraft sync --dry-run
+cfgraft diff --verbose
+```
+
 ## Configuration
 
 Example:
@@ -152,7 +182,7 @@ If state entries remain for mappings that are no longer referenced by active con
 
 ## TUI
 
-Running `cfgraft` without a subcommand launches a Bubble Tea terminal UI for managing `config.yaml` and running targeted sync operations.
+Run `cfgraft tui` to launch a Bubble Tea terminal UI for managing `config.yaml` and running targeted sync operations.
 
 The TUI uses Bubble Tea v2 with an ASCII `cfgraft` header, contextual breadcrumbs, Bubbles list/table/text-input components, bottom action buttons, hover highlighting, styled selections, and colored messages/errors. It supports:
 
