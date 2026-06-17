@@ -41,6 +41,74 @@ func TestSourceIDDerivedFromRepoURL(t *testing.T) {
 	}
 }
 
+func TestRunWithoutSubcommandPrintsRootHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := Run(nil, &stdout, &stderr, "dev"); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr, got %q", stderr.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"Usage:",
+		"cfgraft                 show this help",
+		"cfgraft tui             launch the interactive TUI",
+		"cfgraft sync [flags]",
+		"cfgraft diff [flags]",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected help to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestSubcommandHelp(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "tui",
+			args: []string{"tui", "--help"},
+			want: []string{"Usage:", "cfgraft tui", "interactive cfgraft terminal UI"},
+		},
+		{
+			name: "sync",
+			args: []string{"sync", "--help"},
+			want: []string{"Usage:", "cfgraft sync [flags]", "--dry-run", "--interactive", "--force", "--verbose"},
+		},
+		{
+			name: "diff",
+			args: []string{"diff", "--help"},
+			want: []string{"Usage:", "cfgraft diff [flags]", "--verbose"},
+		},
+		{
+			name: "version",
+			args: []string{"version", "--help"},
+			want: []string{"Usage:", "cfgraft version", "cfgraft --version", "cfgraft -v"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if err := Run(tt.args, &stdout, &stderr, "dev"); err != nil {
+				t.Fatalf("Run returned error: %v", err)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("expected no stderr, got %q", stderr.String())
+			}
+			out := stdout.String()
+			for _, want := range tt.want {
+				if !strings.Contains(out, want) {
+					t.Fatalf("expected help to contain %q, got:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
 func TestTUIMouseHoverAndClickRegions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

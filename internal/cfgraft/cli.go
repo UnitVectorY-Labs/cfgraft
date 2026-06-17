@@ -24,10 +24,21 @@ func VersionString(version string) string {
 
 func Run(args []string, stdout, stderr io.Writer, version string) error {
 	if len(args) == 0 {
-		return runTUI()
+		printHelp(stdout)
+		return nil
 	}
 	switch args[0] {
+	case "tui":
+		if wantsHelp(args[1:]) {
+			printTUIHelp(stdout)
+			return nil
+		}
+		return runTUI()
 	case "sync":
+		if wantsHelp(args[1:]) {
+			printSyncHelp(stdout)
+			return nil
+		}
 		fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		opts := SyncOptions{Refresh: true}
@@ -40,6 +51,10 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 		}
 		return syncCommand(opts, stdout)
 	case "diff":
+		if wantsHelp(args[1:]) {
+			printDiffHelp(stdout)
+			return nil
+		}
 		fs := flag.NewFlagSet("diff", flag.ContinueOnError)
 		fs.SetOutput(stderr)
 		verbose := fs.Bool("verbose", false, "show safety information")
@@ -47,7 +62,14 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 			return err
 		}
 		return diffCommand(*verbose, stdout)
-	case "version", "--version", "-v":
+	case "version":
+		if wantsHelp(args[1:]) {
+			printVersionHelp(stdout)
+			return nil
+		}
+		fmt.Fprintln(stdout, VersionString(version))
+		return nil
+	case "--version", "-v":
 		fmt.Fprintln(stdout, VersionString(version))
 		return nil
 	case "help", "--help", "-h":
@@ -58,11 +80,21 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 	}
 }
 
+func wantsHelp(args []string) bool {
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" || arg == "help" {
+			return true
+		}
+	}
+	return false
+}
+
 func printHelp(w io.Writer) {
 	fmt.Fprintln(w, `cfgraft safely synchronizes files from Git repositories.
 
 Usage:
-  cfgraft                 launch the interactive TUI
+  cfgraft                 show this help
+  cfgraft tui             launch the interactive TUI
   cfgraft sync [flags]    refresh repositories and synchronize mappings
   cfgraft diff [flags]    compare cached sources with destinations
   cfgraft version         print version
@@ -77,8 +109,59 @@ Environment:
   NO_COLOR       disable colored output
 
 Examples:
-  cfgraft
+  cfgraft tui
   cfgraft sync --dry-run
   cfgraft sync --interactive
   cfgraft diff --verbose`)
+}
+
+func printTUIHelp(w io.Writer) {
+	fmt.Fprintln(w, `Launch the interactive cfgraft terminal UI.
+
+Usage:
+  cfgraft tui
+
+The TUI manages config.yaml sources and mappings, and can run sync or diff
+operations for all sources or a selected source.`)
+}
+
+func printSyncHelp(w io.Writer) {
+	fmt.Fprintln(w, `Refresh repositories and synchronize configured mappings.
+
+Usage:
+  cfgraft sync [flags]
+
+Flags:
+  --force        overwrite conflicts with repository content
+  --interactive  prompt for each conflict
+  --dry-run      plan changes without writing destinations or state
+  --verbose      show no-op and extra detail
+
+Examples:
+  cfgraft sync --dry-run
+  cfgraft sync --interactive
+  cfgraft sync --force --verbose`)
+}
+
+func printDiffHelp(w io.Writer) {
+	fmt.Fprintln(w, `Compare cached source content with local destinations.
+
+Usage:
+  cfgraft diff [flags]
+
+Flags:
+  --verbose      show safety information for conflicts
+
+Examples:
+  cfgraft diff
+  cfgraft diff --verbose`)
+}
+
+func printVersionHelp(w io.Writer) {
+	fmt.Fprintln(w, `Print cfgraft version information.
+
+Usage:
+  cfgraft version
+  cfgraft --version
+  cfgraft -v`)
 }
