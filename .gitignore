@@ -2,7 +2,7 @@
 # Do not directly edit this file as it will be overwritten by the .gitrepoforge template.
 
 # Name of compile binary for Go executable
-/cfgraft
+cfgraft
 
 # https://www.toptal.com/developers/gitignore/api/macos
 ### macOS ###
