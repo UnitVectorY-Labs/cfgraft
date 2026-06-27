@@ -55,12 +55,6 @@ The TUI should distinguish between:
 
 Deletion must follow the same safety principles as sync: only files known to be managed and unchanged from the last accepted hash may be deleted without further conflict handling.
 
-## Stale State Resolution UX
-
-`sync` reports stale managed entries, keeps them in state, and does not silently delete local files. A fuller stale-state resolution workflow is still needed.
-
-The application should require explicit confirmation or interactive handling before forgetting stale state entries or deleting associated files.
-
 ## Future Push-Back Workflow
 
 The application should eventually support an explicit workflow for identifying local drift and sending selected changes back to a configured repository.

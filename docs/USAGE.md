@@ -114,6 +114,8 @@ After refresh, `sync` plans destination updates. A destination is safe to overwr
 
 Successful writes update the source-specific state file with the content hash that `cfgraft` placed or explicitly accepted.
 
+If a source or mapping has been removed from `config.yaml`, `sync` prunes the no-longer-referenced state entries. This state cleanup does not delete destination files; managed-file deletion only happens through an explicit configured cleanup flow such as the TUI removal confirmation.
+
 ## Sync Flags
 
 `--dry-run` performs the full planning path, including repository refresh, but does not write destination files, delete files, or update state.
@@ -178,7 +180,7 @@ Symlink synchronization is not supported in the initial release. If a symlink is
 
 Users may edit `config.yaml` directly. Manual config edits do not cause silent destination deletion.
 
-If state entries remain for mappings that are no longer referenced by active config, `sync` reports them as stale managed entries and keeps them in state. Stale entries are not silently forgotten and their destination files are not silently deleted.
+If state entries remain for mappings that are no longer referenced by active config, `sync` reports them as stale managed entries and prunes them from state. Stale destination files are not silently deleted.
 
 ## TUI
 

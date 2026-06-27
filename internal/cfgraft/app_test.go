@@ -441,6 +441,84 @@ func TestTUIRemoveMappingDeletesManagedFilesWhenConfirmed(t *testing.T) {
 	}
 }
 
+func TestTUIRemoveDotSourceMappingDeletesManagedFilesWhenConfirmed(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		Base:     root,
+		Config:   filepath.Join(root, "config.yaml"),
+		Repos:    filepath.Join(root, "repos"),
+		State:    filepath.Join(root, "state.yaml"),
+		StateDir: filepath.Join(root, "state"),
+	}
+	targetRoot := filepath.Join(root, "target")
+	readmeTarget := filepath.Join(targetRoot, "README.md")
+	toolTarget := filepath.Join(targetRoot, "bin", "tool")
+	if err := os.MkdirAll(filepath.Dir(toolTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(readmeTarget, []byte("readme\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(toolTarget, []byte("tool\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	readmeHash, err := fileHash(readmeTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	toolHash, err := fileHash(toolTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{Sources: map[string]Source{
+		"home": {
+			Repo:    "https://example.invalid/home.git",
+			Ref:     Ref{Type: "branch", Name: "main"},
+			LocalID: "home-repo",
+			Mappings: []Mapping{
+				{Source: ".", Target: targetRoot},
+			},
+		},
+	}}
+	if err := writeConfig(paths, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(paths, State{Files: []StateFile{
+		{SourceID: "home", Source: "README.md", Target: readmeTarget, Hash: readmeHash, Type: "file", Mode: 0o644},
+		{SourceID: "home", Source: "bin/tool", Target: toolTarget, Hash: toolHash, Type: "file", Mode: 0o755},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	model := tuiModel{
+		paths:          paths,
+		config:         cfg,
+		screen:         screenConfirm,
+		formKind:       confirmRemoveMap,
+		selectedSource: "home",
+		selectedMap:    0,
+		activeArea:     listArea,
+	}
+
+	model.finishRemoveMapping(true)
+
+	if model.err != nil {
+		t.Fatalf("unexpected remove error: %v", model.err)
+	}
+	if _, err := os.Stat(readmeTarget); !os.IsNotExist(err) {
+		t.Fatalf("expected dot-source mapped file to be removed, got %v", err)
+	}
+	if _, err := os.Stat(toolTarget); !os.IsNotExist(err) {
+		t.Fatalf("expected nested dot-source mapped file to be removed, got %v", err)
+	}
+	state, err := loadState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Files) != 0 {
+		t.Fatalf("expected dot-source mapping state to be removed, got %#v", state.Files)
+	}
+}
+
 func TestTUIRemoveMappingKeepsManagedFilesWhenDeclined(t *testing.T) {
 	paths, _, target, model := setupRemoveSourceModel(t)
 	model.formKind = confirmRemoveMap
@@ -587,6 +665,189 @@ func TestSyncSafetyFlow(t *testing.T) {
 	assertFile(t, target, "repo-v1\n")
 }
 
+func TestSyncPrunesStateForRemovedMapping(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{
+		"home": {
+			Repo:    "https://example.invalid/home.git",
+			Ref:     Ref{Type: "branch", Name: "main"},
+			LocalID: "home-repo",
+			Mappings: []Mapping{
+				{Source: "kept.txt", Target: filepath.Join(home, "target", "kept.txt")},
+			},
+		},
+	}})
+	writeCacheFile(t, paths, "home-repo", "kept.txt", "kept\n")
+	staleTarget := filepath.Join(home, "target", "removed.txt")
+	if err := os.MkdirAll(filepath.Dir(staleTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staleTarget, []byte("removed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staleHash, err := fileHash(staleTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(paths, State{Files: []StateFile{
+		{SourceID: "home", Source: "removed.txt", Target: staleTarget, Hash: staleHash, Type: "file", Mode: 0o644},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := syncCommand(SyncOptions{}, &out); err != nil {
+		t.Fatalf("sync failed: %v\n%s", err, out.String())
+	}
+	assertFile(t, staleTarget, "removed\n")
+	state, err := loadState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range state.Files {
+		if file.Target == staleTarget {
+			t.Fatalf("expected stale removed mapping state to be pruned, got %#v", state.Files)
+		}
+	}
+	if !strings.Contains(out.String(), "stale") {
+		t.Fatalf("expected sync to audit stale state, got:\n%s", out.String())
+	}
+}
+
+func TestSyncPrunesStateForRemovedSource(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{}})
+	target := filepath.Join(home, "target", "old.txt")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := fileHash(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(paths, State{Files: []StateFile{
+		{SourceID: "old", Source: "old.txt", Target: target, Hash: hash, Type: "file", Mode: 0o644},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := syncCommand(SyncOptions{}, &out); err != nil {
+		t.Fatalf("sync failed: %v\n%s", err, out.String())
+	}
+	assertFile(t, target, "old\n")
+	state, err := loadState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Files) != 0 {
+		t.Fatalf("expected removed source state to be pruned, got %#v", state.Files)
+	}
+	if _, err := os.Stat(filepath.Join(paths.StateDir, "old.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("expected removed source state file to be deleted, got %v", err)
+	}
+}
+
+func TestDryRunDoesNotPruneStaleState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{}})
+	target := filepath.Join(home, "target", "old.txt")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hash, err := fileHash(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(paths, State{Files: []StateFile{
+		{SourceID: "old", Source: "old.txt", Target: target, Hash: hash, Type: "file", Mode: 0o644},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := syncCommand(SyncOptions{DryRun: true}, &out); err != nil {
+		t.Fatalf("dry-run sync failed: %v\n%s", err, out.String())
+	}
+	state, err := loadState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Files) != 1 || state.Files[0].Target != target {
+		t.Fatalf("expected dry-run to preserve stale state, got %#v", state.Files)
+	}
+}
+
+func TestSyncSourcePreservesOtherSourceState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	homeTarget := filepath.Join(home, "target", "home.txt")
+	workTarget := filepath.Join(home, "target", "work.txt")
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{
+		"home": {
+			Repo:    "https://example.invalid/home.git",
+			Ref:     Ref{Type: "branch", Name: "main"},
+			LocalID: "home-repo",
+			Mappings: []Mapping{
+				{Source: "home.txt", Target: homeTarget},
+			},
+		},
+		"work": {
+			Repo:    "https://example.invalid/work.git",
+			Ref:     Ref{Type: "branch", Name: "main"},
+			LocalID: "work-repo",
+			Mappings: []Mapping{
+				{Source: "work.txt", Target: workTarget},
+			},
+		},
+	}})
+	writeCacheFile(t, paths, "home-repo", "home.txt", "home\n")
+	writeCacheFile(t, paths, "work-repo", "work.txt", "work\n")
+	if err := os.MkdirAll(filepath.Dir(workTarget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(workTarget, []byte("work\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workHash, err := fileHash(workTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(paths, State{Files: []StateFile{
+		{SourceID: "work", Source: "work.txt", Target: workTarget, Hash: workHash, Type: "file", Mode: 0o644},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := syncSourceCommand("home", SyncOptions{}, &out); err != nil {
+		t.Fatalf("source sync failed: %v\n%s", err, out.String())
+	}
+	state, err := loadState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Files) != 2 {
+		t.Fatalf("expected selected-source sync to preserve unrelated state, got %#v", state.Files)
+	}
+	targets := map[string]bool{}
+	for _, file := range state.Files {
+		targets[file.Target] = true
+	}
+	if !targets[homeTarget] || !targets[workTarget] {
+		t.Fatalf("expected home and work state, got %#v", state.Files)
+	}
+}
+
 func createGitRepo(t *testing.T) string {
 	t.Helper()
 	repo := filepath.Join(t.TempDir(), "repo")
@@ -600,6 +861,32 @@ func createGitRepo(t *testing.T) string {
 	assertCmd(t, repo, "git", "add", ".")
 	assertCmd(t, repo, "git", "-c", "user.name=cfgraft", "-c", "user.email=cfgraft@example.invalid", "commit", "-m", "initial")
 	return repo
+}
+
+func writeCachedConfigForTest(t *testing.T, home string, cfg Config) Paths {
+	t.Helper()
+	paths := Paths{
+		Base:     filepath.Join(home, ".config", "cfgraft"),
+		Config:   filepath.Join(home, ".config", "cfgraft", "config.yaml"),
+		Repos:    filepath.Join(home, ".config", "cfgraft", "repos"),
+		State:    filepath.Join(home, ".config", "cfgraft", "state.yaml"),
+		StateDir: filepath.Join(home, ".config", "cfgraft", "state"),
+	}
+	if err := writeConfig(paths, cfg); err != nil {
+		t.Fatal(err)
+	}
+	return paths
+}
+
+func writeCacheFile(t *testing.T, paths Paths, localID, rel, content string) {
+	t.Helper()
+	path := filepath.Join(paths.Repos, localID, rel)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeConfigForTest(t *testing.T, repo, target string) {
