@@ -1,3 +1,10 @@
+---
+layout: default
+title: Usage
+nav_order: 3
+permalink: /usage
+---
+
 # Usage
 
 `cfgraft` synchronizes files and directories from Git repositories into local configuration paths. Git repositories are treated as the source of truth, while local destinations are user-owned targets protected by state-based safety checks.
