@@ -20,6 +20,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 	var plan Plan
 	stateByKey := make(map[string]StateFile)
 	active := make(map[string]bool)
+	nextKeys := make(map[string]bool)
 	for _, f := range state.Files {
 		stateByKey[stateKey(f.SourceID, f.Source, f.Target)] = f
 	}
@@ -57,7 +58,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 					}
 					sourceRel := filepath.ToSlash(filepath.Join(filepath.Clean(m.Source), rel))
 					target := filepath.Join(filepath.Clean(m.Target), rel)
-					return planFile(path, id, sourceRel, target, info, stateByKey, active, &plan, &next, opts)
+					return planFile(path, id, sourceRel, target, info, stateByKey, active, &plan, &next, nextKeys, opts)
 				})
 				if err != nil {
 					return plan, next, err
@@ -65,27 +66,37 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 				for _, f := range state.Files {
 					if f.SourceID == id && pathEqualOrNested(f.Source, filepath.Clean(m.Source)) && pathEqualOrNested(f.Target, filepath.Clean(m.Target)) {
 						if !active[stateKey(f.SourceID, f.Source, f.Target)] {
-							addDeleteOp(f, &plan, &next, opts)
+							addDeleteOp(f, &plan, &next, nextKeys, opts)
 						}
 					}
 				}
 				continue
 			}
-			if err := planFile(srcRoot, id, filepath.Clean(m.Source), filepath.Clean(m.Target), info, stateByKey, active, &plan, &next, opts); err != nil {
+			if err := planFile(srcRoot, id, filepath.Clean(m.Source), filepath.Clean(m.Target), info, stateByKey, active, &plan, &next, nextKeys, opts); err != nil {
 				return plan, next, err
 			}
 		}
 	}
 	for _, f := range state.Files {
-		if !active[stateKey(f.SourceID, f.Source, f.Target)] && !stateStillMapped(referenceCfg, f) {
+		key := stateKey(f.SourceID, f.Source, f.Target)
+		if active[key] || nextKeys[key] {
+			continue
+		}
+		if stateStillMapped(activeCfg, f) {
+			continue
+		}
+		if stateStillMapped(referenceCfg, f) {
+			addStateFile(&next, nextKeys, f)
+			continue
+		}
+		if !active[key] {
 			plan.Stale = append(plan.Stale, f)
-			next.Files = append(next.Files, f)
 		}
 	}
 	return plan, next, nil
 }
 
-func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, stateByKey map[string]StateFile, active map[string]bool, plan *Plan, next *State, opts SyncOptions) error {
+func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, stateByKey map[string]StateFile, active map[string]bool, plan *Plan, next *State, nextKeys map[string]bool, opts SyncOptions) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("skip symlink source %s:%s", sourceID, sourceRel))
 		return nil
@@ -108,32 +119,32 @@ func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, s
 		op.Kind = "create"
 		op.Reason = "missing destination"
 		plan.Ops = append(plan.Ops, op)
-		next.Files = append(next.Files, record)
+		addStateFile(next, nextKeys, record)
 	case currentHash == hash:
 		if opts.Verbose {
 			plan.Ops = append(plan.Ops, PlannedOp{Kind: "noop", SourceID: sourceID, SourceRel: sourceRel, Target: target, Hash: hash, Reason: "already matches source"})
 		}
-		next.Files = append(next.Files, record)
+		addStateFile(next, nextKeys, record)
 	case !hadState:
 		op.Kind = "conflict"
 		op.Reason = "existing destination has no state entry"
 		plan.Conflicts = append(plan.Conflicts, op)
-		next.Files = append(next.Files, record)
+		addStateFile(next, nextKeys, record)
 	case currentHash != prev.Hash:
 		op.Kind = "conflict"
 		op.Reason = "destination drifted from last accepted state"
 		plan.Conflicts = append(plan.Conflicts, op)
-		next.Files = append(next.Files, record)
+		addStateFile(next, nextKeys, record)
 	default:
 		op.Kind = "update"
 		op.Reason = "source changed"
 		plan.Ops = append(plan.Ops, op)
-		next.Files = append(next.Files, record)
+		addStateFile(next, nextKeys, record)
 	}
 	return nil
 }
 
-func addDeleteOp(f StateFile, plan *Plan, next *State, opts SyncOptions) {
+func addDeleteOp(f StateFile, plan *Plan, next *State, nextKeys map[string]bool, opts SyncOptions) {
 	currentHash, exists, err := existingFileHash(f.Target)
 	if err != nil {
 		plan.Conflicts = append(plan.Conflicts, PlannedOp{Kind: "conflict", SourceID: f.SourceID, SourceRel: f.Source, Target: f.Target, Reason: err.Error()})
@@ -150,7 +161,16 @@ func addDeleteOp(f StateFile, plan *Plan, next *State, opts SyncOptions) {
 	op.Kind = "conflict"
 	op.Reason = "managed file removed from source but destination drifted"
 	plan.Conflicts = append(plan.Conflicts, op)
-	next.Files = append(next.Files, f)
+	addStateFile(next, nextKeys, f)
+}
+
+func addStateFile(state *State, keys map[string]bool, file StateFile) {
+	key := stateKey(file.SourceID, file.Source, file.Target)
+	if keys[key] {
+		return
+	}
+	keys[key] = true
+	state.Files = append(state.Files, file)
 }
 
 func stateStillMapped(cfg Config, f StateFile) bool {
@@ -169,6 +189,12 @@ func stateStillMapped(cfg Config, f StateFile) bool {
 func pathEqualOrNested(path, root string) bool {
 	path = filepath.Clean(path)
 	root = filepath.Clean(root)
+	if root == "." {
+		return path != ".." && !strings.HasPrefix(path, ".."+string(filepath.Separator)) && !strings.HasPrefix(filepath.ToSlash(path), "../")
+	}
+	if root == string(filepath.Separator) {
+		return filepath.IsAbs(path)
+	}
 	return path == root || strings.HasPrefix(path, root+string(filepath.Separator)) || strings.HasPrefix(filepath.ToSlash(path), filepath.ToSlash(root)+"/")
 }
 
