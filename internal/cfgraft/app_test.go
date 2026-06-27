@@ -125,6 +125,7 @@ func TestTUIMouseHoverAndClickRegions(t *testing.T) {
 		screen:     screenSources,
 		hoverIndex: -1,
 	}
+	model.syncComponents()
 
 	model = model.updateMouseMotion(tea.MouseMotionMsg{X: 3, Y: model.actionStartRow()})
 	if model.hoverArea != actionArea || model.hoverIndex != 0 {
@@ -147,6 +148,43 @@ func TestTUIMouseHoverAndClickRegions(t *testing.T) {
 	model, _ = model.updateMouseClick(tea.MouseClickMsg{X: 1, Y: model.listStartRow(), Button: tea.MouseLeft})
 	if model.screen != screenForm || model.formKind != formEditMapping {
 		t.Fatalf("expected mapping click to edit mapping, got screen=%s form=%s", model.screen, model.formKind)
+	}
+}
+
+func TestTUIMouseHoverAfterSourceBackUsesCurrentLayout(t *testing.T) {
+	home := t.TempDir()
+	model := tuiModel{
+		config: Config{Sources: map[string]Source{
+			"home": {
+				Repo: "https://example.invalid/home.git",
+				Ref:  Ref{Type: "branch", Name: "main"},
+				Mappings: []Mapping{
+					{Source: "zshrc", Target: filepath.Join(home, ".zshrc")},
+				},
+			},
+		}},
+		screen:         screenSource,
+		selectedSource: "home",
+		activeArea:     actionArea,
+		actionCursor:   5,
+		hoverIndex:     -1,
+		width:          80,
+		height:         40,
+	}
+	model.syncComponents()
+
+	model, _ = model.updateMouseClick(tea.MouseClickMsg{X: 58, Y: model.actionStartRow(), Button: tea.MouseLeft})
+	if model.screen != screenSources {
+		t.Fatalf("expected Back action to return to sources, got %s", model.screen)
+	}
+
+	// syncComponents on a copy to compute the action row offset for the new screen
+	rendered := model
+	rendered.syncComponents()
+	row := rendered.actionStartRow()
+	model = model.updateMouseMotion(tea.MouseMotionMsg{X: 3, Y: row})
+	if model.hoverArea != actionArea || model.hoverIndex != 0 {
+		t.Fatalf("expected Add action hover after returning to sources, got %q/%d", model.hoverArea, model.hoverIndex)
 	}
 }
 
@@ -275,6 +313,7 @@ func TestTUIOutputBackReturnsToCaller(t *testing.T) {
 		height:             24,
 	}
 	model.outputViewport.SetContent(model.outputText)
+	model.syncComponents()
 
 	next, _ := model.updateKey(tea.KeyPressMsg{Code: 'b', Text: "b"})
 	model = next.(tuiModel)

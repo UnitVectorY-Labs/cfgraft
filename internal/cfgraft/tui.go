@@ -576,6 +576,7 @@ func (m *tuiModel) updateActionListKey(key string, listCount int) {
 }
 
 func (m tuiModel) updateMouseClick(msg tea.MouseClickMsg) (tuiModel, tea.Cmd) {
+	m.syncComponents()
 	if msg.Button != tea.MouseLeft {
 		return m, nil
 	}
@@ -598,12 +599,12 @@ func (m tuiModel) updateMouseClick(msg tea.MouseClickMsg) (tuiModel, tea.Cmd) {
 		case screenForm:
 			m.focusFormField(idx)
 		}
-		m.syncComponents()
 	}
 	return m, nil
 }
 
 func (m tuiModel) updateMouseMotion(msg tea.MouseMotionMsg) tuiModel {
+	m.syncComponents()
 	m.hoverArea, m.hoverIndex = "", -1
 	if idx, ok := m.actionAt(msg.X, msg.Y); ok {
 		m.hoverArea, m.hoverIndex = actionArea, idx
