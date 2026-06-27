@@ -7,7 +7,7 @@ config:
   release: release-go
   justfile: true
   status: active
-  release_github: false
+  release_github: true
   codecov:
     enabled: false
   docs:

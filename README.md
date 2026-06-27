@@ -1,4 +1,4 @@
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Active](https://img.shields.io/badge/Status-Active-green)](https://guide.unitvectorylabs.com/bestpractices/status/#active) 
+[![GitHub release](https://img.shields.io/github/release/UnitVectorY-Labs/cfgraft.svg)](https://github.com/UnitVectorY-Labs/cfgraft/releases/latest) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Active](https://img.shields.io/badge/Status-Active-green)](https://guide.unitvectorylabs.com/bestpractices/status/#active) [![Go Report Card](https://goreportcard.com/badge/github.com/UnitVectorY-Labs/cfgraft)](https://goreportcard.com/report/github.com/UnitVectorY-Labs/cfgraft) 
 
 # cfgraft
 
