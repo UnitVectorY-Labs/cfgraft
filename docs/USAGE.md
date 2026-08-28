@@ -95,7 +95,7 @@ Each source has a repository URL, a ref, and one or more mappings. Ref types are
 
 When sources are added through the TUI, the source ID is derived from the repository URL. For example, `git@github.com:example/dotfiles.git` becomes `dotfiles`. If that ID already exists, `cfgraft` appends a numeric suffix.
 
-Targets must be absolute paths. `cfgraft` does not expand `~`, `$HOME`, or other environment variables in target paths. Destination mappings must not overlap; for example, mapping both `/Users/jared/.config` and `/Users/jared/.config/nvim` is rejected.
+Targets must be absolute paths. `cfgraft` does not expand `~`, `$HOME`, or other environment variables in target paths. Destination mapping roots may overlap; for example, `/Users/jared/.config` and `/Users/jared/.config/nvim` can be configured together. The TUI warns about the overlap, and sync succeeds when the mappings produce distinct destination files. If two source files resolve to the same destination—or one resolves to a path that another needs as a directory—sync stops with an error before writing any files.
 
 Source paths are always relative to the repository root and may not escape it.
 

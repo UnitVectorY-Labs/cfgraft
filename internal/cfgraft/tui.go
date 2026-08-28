@@ -21,6 +21,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const cfgraftLogo = `  ____  __                  __ _
@@ -887,6 +888,10 @@ func (m tuiModel) View() tea.View {
 	fmt.Fprintln(&b, m.headerView())
 	if m.err != nil {
 		fmt.Fprintf(&b, "%s %v\n", styled(errorStyle, "error:"), m.err)
+	} else if warnings := destinationOverlapWarnings(m.config); len(warnings) > 0 {
+		for _, warning := range warnings {
+			fmt.Fprintln(&b, wrappedWarning(warning, m.contentWidth()))
+		}
 	} else {
 		fmt.Fprintln(&b)
 	}
@@ -919,6 +924,21 @@ func (m tuiModel) View() tea.View {
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeAllMotion
 	return view
+}
+
+func wrappedWarning(warning string, width int) string {
+	const label = "warning:"
+	prefixWidth := lipgloss.Width(label) + 1
+	lineWidth := max(1, width-prefixWidth)
+	lines := strings.Split(ansi.Wrap(warning, lineWidth, "/"), "\n")
+	for i := range lines {
+		if i == 0 {
+			lines[i] = styled(warningStyle, label) + " " + lines[i]
+		} else {
+			lines[i] = strings.Repeat(" ", prefixWidth) + lines[i]
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m tuiModel) headerView() string {
@@ -1543,7 +1563,11 @@ func (m *tuiModel) submitMappingForm(confirmedParents bool) tea.Cmd {
 	}
 	m.config = next
 	m.err = nil
-	m.msg = "saved mapping"
+	if warnings := destinationOverlapWarnings(next); len(warnings) > 0 {
+		m.msg = "saved mapping with destination overlap warning"
+	} else {
+		m.msg = "saved mapping"
+	}
 	m.screen = screenSource
 	m.cursor = 0
 	m.activeArea = listArea

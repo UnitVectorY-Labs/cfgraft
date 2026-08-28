@@ -9,9 +9,10 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
-func TestValidateConfigRejectsOverlappingTargets(t *testing.T) {
+func TestValidateConfigWarnsAboutOverlappingTargets(t *testing.T) {
 	paths := Paths{Repos: filepath.Join(t.TempDir(), "repos")}
 	cfg := Config{Sources: map[string]Source{
 		"home": {
@@ -24,8 +25,78 @@ func TestValidateConfigRejectsOverlappingTargets(t *testing.T) {
 		},
 	}}
 	err := validateConfig(cfg, paths)
-	if err == nil || !strings.Contains(err.Error(), "overlap") {
-		t.Fatalf("expected overlap validation error, got %v", err)
+	if err != nil {
+		t.Fatalf("expected overlapping mappings to remain valid, got %v", err)
+	}
+	warnings := destinationOverlapWarnings(cfg)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "overlap") {
+		t.Fatalf("expected overlap warning, got %#v", warnings)
+	}
+}
+
+func TestWrappedWarningFitsContentWidth(t *testing.T) {
+	const width = 42
+	warning := "destination mappings overlap: /a/very/long/configuration/path and /a/very/long/configuration/path/nvim; sync is allowed only when their files do not collide"
+	got := wrappedWarning(warning, width)
+	lines := strings.Split(got, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected warning to wrap, got %q", got)
+	}
+	for i, line := range lines {
+		if lineWidth := lipgloss.Width(line); lineWidth > width {
+			t.Fatalf("line %d is %d cells wide, exceeds %d: %q", i, lineWidth, width, line)
+		}
+		if i > 0 && !strings.HasPrefix(line, strings.Repeat(" ", len("warning: "))) {
+			t.Fatalf("expected continuation line to align with warning text: %q", line)
+		}
+	}
+}
+
+func TestSyncAllowsOverlappingMappingsWithDistinctFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{
+		"home": {
+			Repo: "https://example.invalid/home.git", Ref: Ref{Type: "branch", Name: "main"}, LocalID: "home-repo",
+			Mappings: []Mapping{
+				{Source: "config", Target: filepath.Join(home, "target")},
+				{Source: "nvim", Target: filepath.Join(home, "target", "nvim")},
+			},
+		},
+	}})
+	writeCacheFile(t, paths, "home-repo", "config/shell.conf", "shell\n")
+	writeCacheFile(t, paths, "home-repo", "nvim/init.lua", "nvim\n")
+
+	var out bytes.Buffer
+	if err := syncCommand(SyncOptions{}, &out); err != nil {
+		t.Fatalf("expected distinct files under overlapping mappings to sync successfully: %v\n%s", err, out.String())
+	}
+	assertFile(t, filepath.Join(home, "target", "shell.conf"), "shell\n")
+	assertFile(t, filepath.Join(home, "target", "nvim", "init.lua"), "nvim\n")
+}
+
+func TestSyncRejectsConcreteDestinationFileOverlapBeforeWriting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{
+		"home": {
+			Repo: "https://example.invalid/home.git", Ref: Ref{Type: "branch", Name: "main"}, LocalID: "home-repo",
+			Mappings: []Mapping{
+				{Source: "config", Target: filepath.Join(home, "target")},
+				{Source: "nvim", Target: filepath.Join(home, "target", "nvim")},
+			},
+		},
+	}})
+	writeCacheFile(t, paths, "home-repo", "config/nvim/init.lua", "first\n")
+	writeCacheFile(t, paths, "home-repo", "nvim/init.lua", "second\n")
+
+	var out bytes.Buffer
+	err := syncCommand(SyncOptions{}, &out)
+	if err == nil || !strings.Contains(err.Error(), "destination files overlap") {
+		t.Fatalf("expected concrete destination overlap error, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(home, "target")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected sync to stop before writing destinations, got %v", statErr)
 	}
 }
 

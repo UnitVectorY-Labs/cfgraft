@@ -21,6 +21,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 	stateByKey := make(map[string]StateFile)
 	active := make(map[string]bool)
 	nextKeys := make(map[string]bool)
+	plannedTargets := make(map[string]plannedTarget)
 	for _, f := range state.Files {
 		stateByKey[stateKey(f.SourceID, f.Source, f.Target)] = f
 	}
@@ -58,7 +59,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 					}
 					sourceRel := filepath.ToSlash(filepath.Join(filepath.Clean(m.Source), rel))
 					target := filepath.Join(filepath.Clean(m.Target), rel)
-					return planFile(path, id, sourceRel, target, info, stateByKey, active, &plan, &next, nextKeys, opts)
+					return planFile(path, id, sourceRel, target, info, stateByKey, active, &plan, &next, nextKeys, plannedTargets, opts)
 				})
 				if err != nil {
 					return plan, next, err
@@ -72,7 +73,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 				}
 				continue
 			}
-			if err := planFile(srcRoot, id, filepath.Clean(m.Source), filepath.Clean(m.Target), info, stateByKey, active, &plan, &next, nextKeys, opts); err != nil {
+			if err := planFile(srcRoot, id, filepath.Clean(m.Source), filepath.Clean(m.Target), info, stateByKey, active, &plan, &next, nextKeys, plannedTargets, opts); err != nil {
 				return plan, next, err
 			}
 		}
@@ -96,10 +97,19 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 	return plan, next, nil
 }
 
-func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, stateByKey map[string]StateFile, active map[string]bool, plan *Plan, next *State, nextKeys map[string]bool, opts SyncOptions) error {
+type plannedTarget struct {
+	sourceID  string
+	sourceRel string
+}
+
+func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, stateByKey map[string]StateFile, active map[string]bool, plan *Plan, next *State, nextKeys map[string]bool, plannedTargets map[string]plannedTarget, opts SyncOptions) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("skip symlink source %s:%s", sourceID, sourceRel))
 		return nil
+	}
+	target = filepath.Clean(target)
+	if err := claimPlannedTarget(plannedTargets, target, plannedTarget{sourceID: sourceID, sourceRel: sourceRel}); err != nil {
+		return err
 	}
 	hash, err := fileHash(sourceAbs)
 	if err != nil {
@@ -141,6 +151,21 @@ func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, s
 		plan.Ops = append(plan.Ops, op)
 		addStateFile(next, nextKeys, record)
 	}
+	return nil
+}
+
+func claimPlannedTarget(targets map[string]plannedTarget, target string, incoming plannedTarget) error {
+	for existingPath, existing := range targets {
+		if !pathEqualOrNested(target, existingPath) && !pathEqualOrNested(existingPath, target) {
+			continue
+		}
+		return fmt.Errorf(
+			"destination files overlap: %s from %s:%s conflicts with %s from %s:%s",
+			existingPath, existing.sourceID, existing.sourceRel,
+			target, incoming.sourceID, incoming.sourceRel,
+		)
+	}
+	targets[target] = incoming
 	return nil
 }
 
