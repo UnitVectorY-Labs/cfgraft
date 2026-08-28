@@ -21,6 +21,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 	stateByKey := make(map[string]StateFile)
 	active := make(map[string]bool)
 	nextKeys := make(map[string]bool)
+	plannedTargets := newPlannedTargetIndex()
 	for _, f := range state.Files {
 		stateByKey[stateKey(f.SourceID, f.Source, f.Target)] = f
 	}
@@ -58,7 +59,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 					}
 					sourceRel := filepath.ToSlash(filepath.Join(filepath.Clean(m.Source), rel))
 					target := filepath.Join(filepath.Clean(m.Target), rel)
-					return planFile(path, id, sourceRel, target, info, stateByKey, active, &plan, &next, nextKeys, opts)
+					return planFile(path, id, sourceRel, target, info, stateByKey, active, &plan, &next, nextKeys, plannedTargets, opts)
 				})
 				if err != nil {
 					return plan, next, err
@@ -72,7 +73,7 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 				}
 				continue
 			}
-			if err := planFile(srcRoot, id, filepath.Clean(m.Source), filepath.Clean(m.Target), info, stateByKey, active, &plan, &next, nextKeys, opts); err != nil {
+			if err := planFile(srcRoot, id, filepath.Clean(m.Source), filepath.Clean(m.Target), info, stateByKey, active, &plan, &next, nextKeys, plannedTargets, opts); err != nil {
 				return plan, next, err
 			}
 		}
@@ -96,10 +97,19 @@ func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state S
 	return plan, next, nil
 }
 
-func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, stateByKey map[string]StateFile, active map[string]bool, plan *Plan, next *State, nextKeys map[string]bool, opts SyncOptions) error {
+type plannedTarget struct {
+	sourceID  string
+	sourceRel string
+}
+
+func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, stateByKey map[string]StateFile, active map[string]bool, plan *Plan, next *State, nextKeys map[string]bool, plannedTargets *plannedTargetIndex, opts SyncOptions) error {
 	if info.Mode()&os.ModeSymlink != 0 {
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("skip symlink source %s:%s", sourceID, sourceRel))
 		return nil
+	}
+	target = filepath.Clean(target)
+	if err := plannedTargets.claim(target, plannedTarget{sourceID: sourceID, sourceRel: sourceRel}); err != nil {
+		return err
 	}
 	hash, err := fileHash(sourceAbs)
 	if err != nil {
@@ -142,6 +152,81 @@ func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, s
 		addStateFile(next, nextKeys, record)
 	}
 	return nil
+}
+
+type plannedTargetClaim struct {
+	path   string
+	target plannedTarget
+}
+
+type plannedTargetNode struct {
+	children map[string]*plannedTargetNode
+	claim    *plannedTargetClaim
+	anyClaim *plannedTargetClaim
+}
+
+type plannedTargetIndex struct {
+	root plannedTargetNode
+}
+
+func newPlannedTargetIndex() *plannedTargetIndex {
+	return &plannedTargetIndex{root: plannedTargetNode{children: make(map[string]*plannedTargetNode)}}
+}
+
+func (index *plannedTargetIndex) claim(target string, incoming plannedTarget) error {
+	target = filepath.Clean(target)
+	node := &index.root
+	visited := []*plannedTargetNode{node}
+	for _, component := range plannedTargetComponents(target) {
+		if node.claim != nil {
+			return plannedTargetOverlapError(node.claim, target, incoming)
+		}
+		next := node.children[component]
+		if next == nil {
+			next = &plannedTargetNode{children: make(map[string]*plannedTargetNode)}
+			node.children[component] = next
+		}
+		node = next
+		visited = append(visited, node)
+	}
+	if node.claim != nil {
+		return plannedTargetOverlapError(node.claim, target, incoming)
+	}
+	if node.anyClaim != nil {
+		return plannedTargetOverlapError(node.anyClaim, target, incoming)
+	}
+
+	claim := &plannedTargetClaim{path: target, target: incoming}
+	node.claim = claim
+	for _, visitedNode := range visited {
+		if visitedNode.anyClaim == nil {
+			visitedNode.anyClaim = claim
+		}
+	}
+	return nil
+}
+
+func plannedTargetComponents(target string) []string {
+	volume := filepath.VolumeName(target)
+	rest := strings.TrimPrefix(target, volume)
+	anchor := "relative:" + volume
+	if filepath.IsAbs(target) {
+		anchor = "absolute:" + volume
+		rest = strings.TrimLeft(rest, string(filepath.Separator))
+	}
+	components := []string{anchor}
+	if rest == "" {
+		return components
+	}
+	return append(components, strings.Split(rest, string(filepath.Separator))...)
+}
+
+func plannedTargetOverlapError(existing *plannedTargetClaim, target string, incoming plannedTarget) error {
+	return fmt.Errorf(
+		"destination files overlap: %s from %s:%s conflicts with %s from %s:%s",
+		existing.path, existing.target.sourceID, existing.target.sourceRel,
+		target, incoming.sourceID, incoming.sourceRel,
+	)
 }
 
 func addDeleteOp(f StateFile, plan *Plan, next *State, nextKeys map[string]bool, opts SyncOptions) {

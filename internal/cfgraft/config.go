@@ -44,7 +44,6 @@ func writeConfig(paths Paths, cfg Config) error {
 }
 
 func validateConfig(cfg Config, paths Paths) error {
-	targets := make([]string, 0)
 	for id, src := range cfg.Sources {
 		if strings.TrimSpace(id) == "" {
 			return errors.New("source identifier must not be empty")
@@ -76,15 +75,30 @@ func validateConfig(cfg Config, paths Paths) error {
 			if !filepath.IsAbs(m.Target) {
 				return fmt.Errorf("source %q mapping target %q is not absolute", id, m.Target)
 			}
-			targets = append(targets, filepath.Clean(m.Target))
-		}
-	}
-	sort.Strings(targets)
-	for i := 1; i < len(targets); i++ {
-		prev, cur := targets[i-1], targets[i]
-		if prev == cur || strings.HasPrefix(cur, prev+string(filepath.Separator)) {
-			return fmt.Errorf("destination mappings overlap: %s and %s", prev, cur)
 		}
 	}
 	return nil
+}
+
+func destinationOverlapWarnings(cfg Config) []string {
+	targets := make([]string, 0)
+	for _, src := range cfg.Sources {
+		for _, mapping := range src.Mappings {
+			if filepath.IsAbs(mapping.Target) {
+				targets = append(targets, filepath.Clean(mapping.Target))
+			}
+		}
+	}
+	sort.Strings(targets)
+	warnings := make([]string, 0)
+	for i := 0; i < len(targets); i++ {
+		for j := i + 1; j < len(targets); j++ {
+			parent, child := targets[i], targets[j]
+			if parent != child && !strings.HasPrefix(child, parent+string(filepath.Separator)) {
+				continue
+			}
+			warnings = append(warnings, fmt.Sprintf("destination mappings overlap: %s and %s; sync is allowed only when their files do not collide", parent, child))
+		}
+	}
+	return warnings
 }
