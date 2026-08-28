@@ -100,6 +100,31 @@ func TestSyncRejectsConcreteDestinationFileOverlapBeforeWriting(t *testing.T) {
 	}
 }
 
+func TestSyncRejectsDestinationFileNeededAsDirectoryBeforeWriting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{
+		"home": {
+			Repo: "https://example.invalid/home.git", Ref: Ref{Type: "branch", Name: "main"}, LocalID: "home-repo",
+			Mappings: []Mapping{
+				{Source: "config", Target: filepath.Join(home, "target")},
+				{Source: "nvim", Target: filepath.Join(home, "target", "nvim")},
+			},
+		},
+	}})
+	writeCacheFile(t, paths, "home-repo", "config/nvim", "file\n")
+	writeCacheFile(t, paths, "home-repo", "nvim/init.lua", "nested\n")
+
+	var out bytes.Buffer
+	err := syncCommand(SyncOptions{}, &out)
+	if err == nil || !strings.Contains(err.Error(), "destination files overlap") {
+		t.Fatalf("expected file-versus-directory destination overlap error, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(home, "target")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected sync to stop before writing destinations, got %v", statErr)
+	}
+}
+
 func TestSourceIDDerivedFromRepoURL(t *testing.T) {
 	cfg := Config{Sources: map[string]Source{
 		"dotfiles": {Repo: "https://github.com/example/dotfiles.git"},
