@@ -13,3 +13,4 @@ config:
   docs:
     enabled: true
     domain: cfgraft.unitvectorylabs.com
+  osv: sarif
