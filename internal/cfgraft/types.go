@@ -12,10 +12,11 @@ type Config struct {
 }
 
 type Source struct {
-	Repo     string    `yaml:"repo"`
-	Ref      Ref       `yaml:"ref"`
-	LocalID  string    `yaml:"local_id,omitempty"`
-	Mappings []Mapping `yaml:"mappings"`
+	Repo      string    `yaml:"repo"`
+	Condition string    `yaml:"condition,omitempty"`
+	Ref       Ref       `yaml:"ref"`
+	LocalID   string    `yaml:"local_id,omitempty"`
+	Mappings  []Mapping `yaml:"mappings"`
 }
 
 type Ref struct {
@@ -24,8 +25,9 @@ type Ref struct {
 }
 
 type Mapping struct {
-	Source string `yaml:"source"`
-	Target string `yaml:"target"`
+	Source    string `yaml:"source"`
+	Target    string `yaml:"target"`
+	Condition string `yaml:"condition,omitempty"`
 }
 
 type State struct {

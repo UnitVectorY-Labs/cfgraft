@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -25,7 +26,57 @@ func loadConfig(paths Paths) (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	return parseConfig(data, paths)
+	cfg, err = parseConfig(data, paths)
+	if err != nil {
+		return cfg, err
+	}
+	return activeConfig(cfg, paths)
+}
+
+var conditionName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+func conditionEnabled(paths Paths, name string) (bool, error) {
+	if name == "" {
+		return true, nil
+	}
+	path := filepath.Join(paths.Base, "condition-"+name)
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check condition %q: %w", name, err)
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("condition %q: %s is not a regular file", name, path)
+	}
+	return true, nil
+}
+
+func activeConfig(cfg Config, paths Paths) (Config, error) {
+	active := Config{Sources: make(map[string]Source)}
+	for id, src := range cfg.Sources {
+		enabled, err := conditionEnabled(paths, src.Condition)
+		if err != nil {
+			return Config{}, err
+		}
+		if !enabled {
+			continue
+		}
+		mappings := make([]Mapping, 0, len(src.Mappings))
+		for _, m := range src.Mappings {
+			enabled, err := conditionEnabled(paths, m.Condition)
+			if err != nil {
+				return Config{}, err
+			}
+			if enabled {
+				mappings = append(mappings, m)
+			}
+		}
+		src.Mappings = mappings
+		active.Sources[id] = src
+	}
+	return active, nil
 }
 
 func readConfig(paths Paths) (Config, error) {
@@ -69,6 +120,9 @@ func writeConfig(paths Paths, cfg Config) error {
 
 func validateConfig(cfg Config, paths Paths) error {
 	for id, src := range cfg.Sources {
+		if src.Condition != "" && !conditionName.MatchString(src.Condition) {
+			return fmt.Errorf("source %q has invalid condition %q", id, src.Condition)
+		}
 		if strings.TrimSpace(id) == "" {
 			return errors.New("source identifier must not be empty")
 		}
@@ -89,6 +143,9 @@ func validateConfig(cfg Config, paths Paths) error {
 			return fmt.Errorf("source %q repository cache escapes repos directory", id)
 		}
 		for _, m := range src.Mappings {
+			if m.Condition != "" && !conditionName.MatchString(m.Condition) {
+				return fmt.Errorf("source %q mapping has invalid condition %q", id, m.Condition)
+			}
 			if strings.TrimSpace(m.Source) == "" {
 				return fmt.Errorf("source %q has mapping with empty source path", id)
 			}

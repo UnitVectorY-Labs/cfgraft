@@ -38,8 +38,29 @@ Replace the repository URL, ref, and paths with your own. This example maps two 
 - `source` is a nonempty path relative to the repository root. It cannot escape that root. Use `.` to map the repository root.
 - `target` is the destination file or directory. It must be an absolute path, `~/` followed by a path, or `"~"` for the home directory itself. Quote `"~"` because an unquoted tilde is YAML null.
 - `local_id` is optional and selects the repository cache path relative to cfgraft's repos directory. It must not escape that directory. If omitted, cfgraft derives a cache name from the source ID and repository URL.
+- `condition` is optional on a source or mapping. When present, the entry is enabled only if the machine-local marker file for that name exists. See below.
 
 A file source maps to a file target; a directory source maps its contents into a target directory. Mapping roots may overlap, but sync stops before writing if source files resolve to the same destination or if a destination file conflicts with a directory needed by another mapping.
+
+## Machine-local conditions
+
+Use a `condition` to share the same config across machines while selecting sources or mappings locally:
+
+```yaml
+sources:
+  dotfiles:
+    repo: https://example.com/dotfiles.git
+    ref: {type: branch, name: main}
+    mappings:
+      - {source: mac/app.conf, target: ~/.config/app.conf, condition: mac}
+      - {source: linux/app.conf, target: ~/.config/app.conf, condition: linux}
+```
+
+On a Mac, run `touch ~/.config/cfgraft/condition-mac`; on Linux, create `~/.config/cfgraft/condition-linux` instead. Create the directory first if needed. Remove a marker to disable its entries. The marker must be a regular file; its contents are ignored. Condition names must begin with an ASCII letter or digit and contain only ASCII letters, digits, underscores, and hyphens. Names are case-sensitive. Markers live beside `config.yaml` under the current user's home, independent of the mapping home override.
+
+A source without a condition is enabled; a mapping without one is enabled when its source is enabled. A source condition disables the entire source, including repository refresh. If both source and mapping have conditions, both must be enabled. `cfgraft validate` checks all entries and shows condition status; `sync` and `diff` operate only on enabled entries. Conditions are evaluated when each command starts, so a marker changed by a sync takes effect on the next command.
+
+Disabling an entry has the same state behavior as removing it: a subsequent sync prunes its stale state without deleting destination files. Re-enabling it can therefore produce a conflict if an existing destination differs from the repository content.
 
 ## Home directory in targets
 
