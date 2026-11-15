@@ -127,9 +127,9 @@ func TestRunWithoutSubcommandPrintsRootHelp(t *testing.T) {
 	out := stdout.String()
 	for _, want := range []string{
 		"Usage:",
-		"cfgraft                 show this help",
-		"cfgraft sync [flags]",
-		"cfgraft diff [flags]",
+		"cfgraft <command> [flags]",
+		"validate",
+		"config",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected help to contain %q, got:\n%s", want, out)
@@ -153,7 +153,7 @@ func TestSubcommandHelp(t *testing.T) {
 		{
 			name: "sync",
 			args: []string{"sync", "--help"},
-			want: []string{"Usage:", "cfgraft sync [flags]", "--dry-run", "--interactive", "--force", "--verbose"},
+			want: []string{"Usage:", "cfgraft sync [flags]", "--dry-run", "CFGRAFT_DRY_RUN", "--force", "--verbose"},
 		},
 		{
 			name: "diff",
@@ -163,7 +163,7 @@ func TestSubcommandHelp(t *testing.T) {
 		{
 			name: "version",
 			args: []string{"version", "--help"},
-			want: []string{"Usage:", "cfgraft version", "cfgraft --version", "cfgraft -v"},
+			want: []string{"Usage:", "cfgraft version"},
 		},
 	}
 	for _, tt := range tests {
@@ -199,9 +199,6 @@ func TestSyncSafetyFlow(t *testing.T) {
 	assertFile(t, target, "repo-v1\n")
 	if _, err := os.Stat(filepath.Join(home, ".config", "cfgraft", "state", "home.yaml")); err != nil {
 		t.Fatalf("expected per-source state file: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".config", "cfgraft", "state.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("expected legacy state.yaml to be absent after split-state write, got %v", err)
 	}
 
 	if err := os.WriteFile(target, []byte("local-change\n"), 0o644); err != nil {
@@ -430,8 +427,7 @@ func writeCachedConfigForTest(t *testing.T, home string, cfg Config) Paths {
 	paths := Paths{
 		Base:     filepath.Join(home, ".config", "cfgraft"),
 		Config:   filepath.Join(home, ".config", "cfgraft", "config.yaml"),
-		Repos:    filepath.Join(home, ".config", "cfgraft", "repos"),
-		State:    filepath.Join(home, ".config", "cfgraft", "state.yaml"),
+		Repos:    filepath.Join(home, ".cache", "cfgraft", "repos"),
 		StateDir: filepath.Join(home, ".config", "cfgraft", "state"),
 	}
 	if err := writeConfig(paths, cfg); err != nil {
@@ -489,5 +485,77 @@ func assertFile(t *testing.T, path, want string) {
 	}
 	if string(got) != want {
 		t.Fatalf("unexpected %s content: got %q want %q", path, string(got), want)
+	}
+}
+
+func TestValidateIsReadOnlyAndRejectsUnknownFields(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var out, errout bytes.Buffer
+	if err := Run([]string{"validate"}, &out, &errout, "dev"); err == nil {
+		t.Fatal("missing config should fail")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config")); !os.IsNotExist(err) {
+		t.Fatal("validate created files")
+	}
+	dir := filepath.Join(home, ".config", "cfgraft")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("sources: {}\ntypo: true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"validate"}, &out, &errout, "dev"); err == nil {
+		t.Fatal("unknown field accepted")
+	}
+	if err := os.WriteFile(path, []byte("sources: {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"validate"}, &out, &errout, "dev"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFlagEnvironmentAndRemovedInteractive(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CFGRAFT_VERBOSE", "invalid")
+	var out, errout bytes.Buffer
+	if err := Run([]string{"diff"}, &out, &errout, "dev"); err == nil {
+		t.Fatal("invalid boolean accepted")
+	}
+	if err := Run([]string{"sync", "--interactive"}, &out, &errout, "dev"); err == nil {
+		t.Fatal("interactive flag accepted")
+	}
+	// Explicit flags override even an invalid environment default.
+	if err := Run([]string{"diff", "--verbose=false"}, &out, &errout, "dev"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateListsSourcesAndResolvedMappings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("NO_COLOR", "1")
+	dir := filepath.Join(home, ".config", "cfgraft")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	config := "sources:\n  zed:\n    repo: https://example.com/z.git\n    ref: {type: tag, name: v1}\n    mappings: []\n  alpha:\n    repo: https://example.com/a.git\n    ref: {type: branch, name: main}\n    mappings:\n      - {source: folder, target: ~/output}\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(config), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errout bytes.Buffer
+	if err := Run([]string{"validate"}, &out, &errout, "dev"); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"source   alpha  https://example.com/a.git  branch:main", "mapping  alpha:folder -> " + filepath.Join(home, "output"), "source   zed  https://example.com/z.git  tag:v1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	if strings.Index(got, "source   alpha") > strings.Index(got, "source   zed") {
+		t.Fatalf("sources not sorted: %s", got)
 	}
 }

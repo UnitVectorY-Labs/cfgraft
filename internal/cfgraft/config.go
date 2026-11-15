@@ -1,9 +1,11 @@
 package cfgraft
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"gopkg.in/yaml.v3"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,8 +25,30 @@ func loadConfig(paths Paths) (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	return parseConfig(data, paths)
+}
+
+func readConfig(paths Paths) (Config, error) {
+	data, err := os.ReadFile(paths.Config)
+	if err != nil {
+		return Config{}, err
+	}
+	return parseConfig(data, paths)
+}
+
+func parseConfig(data []byte, paths Paths) (Config, error) {
+	var cfg Config
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err != nil && err != io.EOF {
 		return cfg, err
+	}
+	var extra interface{}
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err != nil {
+			return cfg, err
+		}
+		return cfg, errors.New("multiple YAML documents are not supported")
 	}
 	if cfg.Sources == nil {
 		cfg.Sources = map[string]Source{}

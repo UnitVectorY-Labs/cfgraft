@@ -1,7 +1,6 @@
 package cfgraft
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -40,17 +39,8 @@ func syncCommand(opts SyncOptions, out io.Writer) error {
 	if opts.DryRun {
 		return nil
 	}
-	if len(plan.Conflicts) > 0 && !opts.Force && !opts.Interactive {
-		return fmt.Errorf("%d conflict(s); rerun with --force or --interactive", len(plan.Conflicts))
-	}
-	if opts.Interactive && !opts.Force {
-		accepted, err := promptConflicts(plan.Conflicts, out)
-		if err != nil {
-			return err
-		}
-		if !accepted {
-			return errors.New("unresolved conflicts")
-		}
+	if len(plan.Conflicts) > 0 && !opts.Force {
+		return fmt.Errorf("%d conflict(s); rerun with --force", len(plan.Conflicts))
 	}
 	for _, op := range append(plan.Ops, plan.Conflicts...) {
 		if err := applyOp(op); err != nil {
@@ -93,17 +83,8 @@ func syncSourceCommand(sourceID string, opts SyncOptions, out io.Writer) error {
 	if opts.DryRun {
 		return nil
 	}
-	if len(plan.Conflicts) > 0 && !opts.Force && !opts.Interactive {
-		return fmt.Errorf("%d conflict(s); rerun with --force or --interactive", len(plan.Conflicts))
-	}
-	if opts.Interactive && !opts.Force {
-		accepted, err := promptConflicts(plan.Conflicts, out)
-		if err != nil {
-			return err
-		}
-		if !accepted {
-			return errors.New("unresolved conflicts")
-		}
+	if len(plan.Conflicts) > 0 && !opts.Force {
+		return fmt.Errorf("%d conflict(s); rerun with --force", len(plan.Conflicts))
 	}
 	for _, op := range append(plan.Ops, plan.Conflicts...) {
 		if err := applyOp(op); err != nil {
@@ -111,22 +92,6 @@ func syncSourceCommand(sourceID string, opts SyncOptions, out io.Writer) error {
 		}
 	}
 	return writeState(paths, nextState)
-}
-
-func promptConflicts(conflicts []PlannedOp, out io.Writer) (bool, error) {
-	in := bufio.NewReader(os.Stdin)
-	for _, op := range conflicts {
-		fmt.Fprintf(out, "overwrite %s with %s:%s? [y/N] ", op.Target, op.SourceID, op.SourceRel)
-		answer, err := in.ReadString('\n')
-		if err != nil {
-			return false, err
-		}
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		if answer != "y" && answer != "yes" {
-			return false, nil
-		}
-	}
-	return true, nil
 }
 
 func refreshRepos(paths Paths, cfg Config, verbose bool, out io.Writer) error {

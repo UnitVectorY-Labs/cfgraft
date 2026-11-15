@@ -14,7 +14,7 @@ The file is YAML. Indent with spaces and quote values when necessary. For exampl
 ```yaml
 sources:
   dotfiles:
-    repo: git@github.com:example/dotfiles.git
+    repo: https://example.com/dotfiles.git
     ref:
       type: branch
       name: main
@@ -53,6 +53,6 @@ A trailing newline is allowed. This file is machine-specific, so it can be left 
 
 ## Applying edits
 
-Save the YAML and run `cfgraft sync --dry-run` to review the planned changes, then run `cfgraft sync` to apply them. A dry run still refreshes the repository caches. Existing destination files are protected by cfgraft's conflict checks; see [Usage](USAGE.md) for sync flags and safety behavior.
+Save the YAML and run `cfgraft validate` to check its structure and paths and list each source and mapping, then run `cfgraft sync --dry-run` to review the planned changes, then run `cfgraft sync` to apply them. A dry run still refreshes the repository caches. Existing destination files are protected by cfgraft's conflict checks; see [Usage](USAGE.md) for sync flags and safety behavior.
 
 Removing a source or mapping from the configuration does not delete its destination files. A subsequent sync reports and prunes the no-longer-referenced state; remove unwanted destination files manually.
