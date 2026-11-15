@@ -28,12 +28,6 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 		return nil
 	}
 	switch args[0] {
-	case "tui":
-		if wantsHelp(args[1:]) {
-			printTUIHelp(stdout)
-			return nil
-		}
-		return runTUI()
 	case "sync":
 		if wantsHelp(args[1:]) {
 			printSyncHelp(stdout)
@@ -94,7 +88,6 @@ func printHelp(w io.Writer) {
 
 Usage:
   cfgraft                 show this help
-  cfgraft tui             launch the interactive TUI
   cfgraft sync [flags]    refresh repositories and synchronize mappings
   cfgraft diff [flags]    compare cached sources with destinations
   cfgraft version         print version
@@ -109,20 +102,9 @@ Environment:
   NO_COLOR       disable colored output
 
 Examples:
-  cfgraft tui
   cfgraft sync --dry-run
   cfgraft sync --interactive
   cfgraft diff --verbose`)
-}
-
-func printTUIHelp(w io.Writer) {
-	fmt.Fprintln(w, `Launch the interactive cfgraft terminal UI.
-
-Usage:
-  cfgraft tui
-
-The TUI manages config.yaml sources and mappings, and can run sync or diff
-operations for all sources or a selected source.`)
 }
 
 func printSyncHelp(w io.Writer) {

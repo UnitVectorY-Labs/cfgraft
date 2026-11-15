@@ -54,16 +54,9 @@ cfgraft
 Each subcommand also supports `--help`:
 
 ```text
-cfgraft tui --help
 cfgraft sync --help
 cfgraft diff --help
 cfgraft version --help
-```
-
-Use `tui` for interactive configuration:
-
-```text
-cfgraft tui
 ```
 
 Use `sync` and `diff` for scripting and non-interactive workflows:
@@ -93,9 +86,7 @@ sources:
 
 Each source has a repository URL, a ref, and one or more mappings. Ref types are `branch`, `tag`, or `commit`.
 
-When sources are added through the TUI, the source ID is derived from the repository URL. For example, `git@github.com:example/dotfiles.git` becomes `dotfiles`. If that ID already exists, `cfgraft` appends a numeric suffix.
-
-Targets must be absolute paths or start with `~/` (or be `~` alone). `~` expands to the current user’s home directory by default. To override it, create `~/.config/cfgraft/home` containing the absolute home directory path, for example `/Users/jared` or `/home/jared`; a trailing newline is allowed. The override affects mapping targets only, not where cfgraft finds its own configuration, repositories, or state. Other relative paths, `~user`, `$HOME`, and other environment variables are not expanded. The `~` form is retained when the TUI saves the configuration, so the same config can be shared across machines. Destination mapping roots may overlap; for example, `/Users/jared/.config` and `/Users/jared/.config/nvim` can be configured together. The TUI warns about the overlap, and sync succeeds when the mappings produce distinct destination files. If two source files resolve to the same destination—or one resolves to a path that another needs as a directory—sync stops with an error before writing any files.
+Edit `config.yaml` to add and change sources and mappings. Targets must be absolute paths or start with `~/` (or be `~` alone; quote it as `"~"` in YAML). `~` expands to the current user’s home directory by default. To override it, create `~/.config/cfgraft/home` containing the absolute home directory path, for example `/Users/jared` or `/home/jared`; a trailing newline is allowed. The override affects mapping targets only, not where cfgraft finds its own configuration, repositories, or state. Other relative paths, `~user`, `$HOME`, and other environment variables are not expanded. Destination mapping roots may overlap; for example, `/Users/jared/.config` and `/Users/jared/.config/nvim` can be configured together. Sync succeeds when the mappings produce distinct destination files. If two source files resolve to the same destination—or one resolves to a path that another needs as a directory—sync stops with an error before writing any files.
 
 Source paths are always relative to the repository root and may not escape it.
 
@@ -121,7 +112,7 @@ After refresh, `sync` plans destination updates. A destination is safe to overwr
 
 Successful writes update the source-specific state file with the content hash that `cfgraft` placed or explicitly accepted.
 
-If a source or mapping has been removed from `config.yaml`, `sync` prunes the no-longer-referenced state entries. This state cleanup does not delete destination files; managed-file deletion only happens through an explicit configured cleanup flow such as the TUI removal confirmation.
+If a source or mapping has been removed from `config.yaml`, `sync` prunes the no-longer-referenced state entries. This state cleanup does not delete destination files; remove unwanted destination files manually.
 
 ## Sync Flags
 
@@ -135,7 +126,7 @@ If a source or mapping has been removed from `config.yaml`, `sync` prunes the no
 
 ## Color Output
 
-`cfgraft` uses color and styling for human-readable CLI output and the TUI. Set `NO_COLOR` to any value to disable colored/styled output:
+`cfgraft` uses color and styling for human-readable CLI output. Set `NO_COLOR` to any value to disable colored/styled output:
 
 ```text
 NO_COLOR=1 cfgraft sync --dry-run
@@ -188,42 +179,3 @@ Symlink synchronization is not supported in the initial release. If a symlink is
 Users may edit `config.yaml` directly. Manual config edits do not cause silent destination deletion.
 
 If state entries remain for mappings that are no longer referenced by active config, `sync` reports them as stale managed entries and prunes them from state. Stale destination files are not silently deleted.
-
-## TUI
-
-Run `cfgraft tui` to launch a Bubble Tea terminal UI for managing `config.yaml` and running targeted sync operations.
-
-The TUI uses Bubble Tea v2 with an ASCII `cfgraft` header, contextual breadcrumbs, Bubbles list/table/text-input components, bottom action buttons, hover highlighting, styled selections, and colored messages/errors. It supports:
-
-1. Viewing configured sources.
-2. Adding a source with a Git URL, ref type, and ref name.
-3. Editing an existing source.
-4. Removing a source from config.
-5. Viewing mappings for a selected source.
-6. Adding mappings.
-7. Editing mappings.
-8. Removing mappings from config.
-9. Syncing all sources.
-10. Syncing one selected source.
-11. Diffing all sources.
-12. Diffing one selected source.
-
-The source list is vertical and rendered with the Bubbles list component. Page-level actions are shown as bottom buttons such as Add, Sync, and Diff. A selected source page shows source details in a Bubbles table, then the mappings in a separate Bubbles list; if a source has no mappings, the mappings area shows `No Mappings` in muted text. The selected source page exposes Edit, Remove, Add Mapping, Sync, Diff, and Back as bottom buttons. Mouse hover highlights clickable actions and list rows, and mouse clicks move the active selection.
-
-Keyboard focus moves between the primary content and the bottom button bar with tab and shift-tab. Shortcut letters activate immediately from anywhere on the screen: A for Add, S for Sync or Save, D for Diff, E for Edit, R for Remove, and B for Back. Enter activates the selected list row or focused button. The bottom of each screen renders contextual keyboard help with the Bubbles help component; press `?` to toggle the expanded help view.
-
-Forms use Bubbles text inputs for normal terminal text editing behavior, including paste support. On mapping add/edit screens, Enter moves into or out of the active field. While editing a mapping path, up/down selects autocomplete suggestions and tab completes the selected suggestion. Source-path suggestions are relative to the checked-out repository cache and are shown one directory level at a time; target-path suggestions come from the host filesystem after typing a starting path. Use the bottom buttons or shortcut letters to save, add, remove, or go back.
-
-When a source is added or edited, the TUI writes the validated config and checks out the configured repository cache in a background Bubble Tea command. Sync and diff actions also run in the background. While one of these operations is running, the TUI shows a modal with a Bubbles spinner and progress bar for the active operation.
-
-Command output is shown in a Bubbles viewport so large sync or diff results remain scrollable instead of running off the bottom of the screen. Pager keys and mouse wheel scrolling work in the output view.
-
-Source IDs are derived from the Git URL rather than entered manually. Mapping changes are written to config after validation; sync is still triggered manually from the selected source menu.
-
-Mapping source and target fields use text input suggestions. Source path suggestions come from the checked-out repository cache as repository-relative paths, one directory level at a time, and target path suggestions come from the local filesystem near the path being typed. Mapping forms show a check table above the path fields to indicate whether the source path exists in the source cache. If a mapping target would require new parent folders, the TUI asks for confirmation before saving the mapping.
-
-Removing a source or mapping from the TUI removes only the configuration entry. Local destination files are left in place.
-
-## Future Push-Back Workflow
-
-`cfgraft` treats repositories as read-only sources for normal sync. A future explicit workflow may detect local drift, show diffs, copy selected local changes back into a source repository, commit, and push them. That workflow is intentionally not part of default sync behavior.
