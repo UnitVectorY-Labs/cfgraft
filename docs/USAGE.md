@@ -106,7 +106,7 @@ If a source or mapping has been removed from `config.yaml`, `sync` prunes the no
 
 Boolean flags also accept environment defaults: `CFGRAFT_FORCE`, `CFGRAFT_DRY_RUN`, and `CFGRAFT_VERBOSE`. Values accept Go boolean forms such as `true`, `false`, `1`, and `0`. An explicit flag, including `--force=false`, overrides its environment variable. `CFGRAFT_VERBOSE` applies to both sync and diff.
 
-Run `cfgraft config` for the file format and `cfgraft validate` to check the existing file without writing files or accessing Git. Validation checks YAML fields and paths, not repository availability or mapping contents. A missing config is an error. Other commands create an empty config on first use.
+Run `cfgraft config` for the file format and `cfgraft validate` to check the existing file and list sources and mappings without writing files or accessing Git. Sources are listed by ID with their repository and ref; each mapping shows its repository-relative source and resolved destination. Validation checks YAML fields and paths, not repository availability or mapping contents. A missing config is an error. Other commands create an empty config on first use.
 
 ## Color Output
 

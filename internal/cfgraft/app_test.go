@@ -532,3 +532,30 @@ func TestFlagEnvironmentAndRemovedInteractive(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestValidateListsSourcesAndResolvedMappings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("NO_COLOR", "1")
+	dir := filepath.Join(home, ".config", "cfgraft")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	config := "sources:\n  zed:\n    repo: https://example.com/z.git\n    ref: {type: tag, name: v1}\n    mappings: []\n  alpha:\n    repo: https://example.com/a.git\n    ref: {type: branch, name: main}\n    mappings:\n      - {source: folder, target: ~/output}\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(config), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errout bytes.Buffer
+	if err := Run([]string{"validate"}, &out, &errout, "dev"); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{"source   alpha  https://example.com/a.git  branch:main", "mapping  alpha:folder -> " + filepath.Join(home, "output"), "source   zed  https://example.com/z.git  tag:v1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	if strings.Index(got, "source   alpha") > strings.Index(got, "source   zed") {
+		t.Fatalf("sources not sorted: %s", got)
+	}
+}

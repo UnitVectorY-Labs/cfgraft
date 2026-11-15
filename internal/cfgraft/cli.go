@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -96,7 +97,7 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 		return nil
 	case "validate":
 		if len(args) == 2 && wantsHelp(args[1:]) {
-			fmt.Fprintln(stdout, "Validate the configuration without accessing repositories or writing files.\n\nUsage:\n  cfgraft validate")
+			fmt.Fprintln(stdout, "Validate the configuration and list mappings without accessing repositories or writing files.\n\nUsage:\n  cfgraft validate")
 			return nil
 		}
 		if len(args) != 1 {
@@ -106,10 +107,27 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 		if err != nil {
 			return err
 		}
-		if _, err = readConfig(paths); err != nil {
+		cfg, err := readConfig(paths)
+		if err != nil {
 			return fmt.Errorf("validate %s: %w", paths.Config, err)
 		}
-		fmt.Fprintf(stdout, "%s %s\n", styled(successStyle, "valid"), paths.Config)
+		fmt.Fprintf(stdout, "%s %s\n", styled(successStyle, "valid   "), paths.Config)
+		ids := make([]string, 0, len(cfg.Sources))
+		for id := range cfg.Sources {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			src := cfg.Sources[id]
+			fmt.Fprintf(stdout, "%s %s  %s  %s:%s\n", styled(actionStyle, "source  "), id, src.Repo, src.Ref.Type, src.Ref.Name)
+			for _, mapping := range src.Mappings {
+				target, err := resolveTarget(paths, mapping.Target)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(stdout, "%s %s:%s -> %s\n", styled(actionStyle, "mapping "), id, mapping.Source, target)
+			}
+		}
 		return nil
 	case "version", "--version", "-v":
 		if len(args) == 2 && wantsHelp(args[1:]) {
@@ -139,7 +157,7 @@ func printHelp(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "cfgraft safely synchronizes files from Git repositories.\n\n%s\n  cfgraft <command> [flags]\n\n%s\n  sync       refresh repositories and synchronize mappings\n  diff       compare cached sources with destinations\n  validate   validate configuration without changing files\n  config     explain the configuration format\n  version    print version information\n  help       show help for a command\n\n%s\n  %s\n\nRun cfgraft help <command> for details. Set NO_COLOR to disable color.\n", heading("Usage:"), heading("Commands:"), heading("Config:"), paths.Config)
+	fmt.Fprintf(w, "cfgraft safely synchronizes files from Git repositories.\n\n%s\n  cfgraft <command> [flags]\n\n%s\n  sync       refresh repositories and synchronize mappings\n  diff       compare cached sources with destinations\n  validate   validate configuration and list mappings\n  config     explain the configuration format\n  version    print version information\n  help       show help for a command\n\n%s\n  %s\n\nRun cfgraft help <command> for details. Set NO_COLOR to disable color.\n", heading("Usage:"), heading("Commands:"), heading("Config:"), paths.Config)
 	return nil
 }
 func printCommandHelp(w io.Writer, name string) {
@@ -151,5 +169,5 @@ func printCommandHelp(w io.Writer, name string) {
 	fmt.Fprintln(w, "\nBoolean environment values accept true or false; flags take precedence.")
 }
 func printConfigHelp(w io.Writer) {
-	fmt.Fprintf(w, "Configuration is hand-edited YAML. Run cfgraft validate to check it.\n\n%s\n  sources:                 # source ID -> settings\n    dotfiles:\n      repo: git@example.com:dotfiles.git\n      ref:\n        type: branch       # branch, tag, or commit\n        name: main\n      # local_id: dotfiles # optional cache path relative to repos directory\n      mappings:\n        - source: shell/zshrc # relative to repository root; . means root\n          target: ~/.zshrc    # absolute path or ~/ path\n\nTargets may also be \"~\" (quoted). ~/.config/cfgraft/home may contain an\nabsolute home override for targets. See docs/CONFIG.md for details.\n", heading("Format:"))
+	fmt.Fprintf(w, "Configuration is hand-edited YAML. Run cfgraft validate to check it.\n\n%s\n  sources:                 # source ID -> settings\n    dotfiles:\n      repo: https://example.com/dotfiles.git\n      ref:\n        type: branch       # branch, tag, or commit\n        name: main\n      # local_id: dotfiles # optional cache path relative to repos directory\n      mappings:\n        - source: shell/zshrc # relative to repository root; . means root\n          target: ~/.zshrc    # absolute path or ~/ path\n\nTargets may also be \"~\" (quoted). ~/.config/cfgraft/home may contain an\nabsolute home override for targets. See docs/CONFIG.md for details.\n", heading("Format:"))
 }
