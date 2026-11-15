@@ -68,27 +68,7 @@ cfgraft diff --verbose
 
 ## Configuration
 
-Example:
-
-```yaml
-sources:
-  home:
-    repo: git@github.com:example/home.git
-    ref:
-      type: branch
-      name: main
-    mappings:
-      - source: zsh/zshrc
-        target: ~/.zshrc
-      - source: nvim
-        target: ~/.config/nvim
-```
-
-Each source has a repository URL, a ref, and one or more mappings. Ref types are `branch`, `tag`, or `commit`.
-
-Edit `config.yaml` to add and change sources and mappings. Targets must be absolute paths or start with `~/` (or be `~` alone; quote it as `"~"` in YAML). `~` expands to the current user’s home directory by default. To override it, create `~/.config/cfgraft/home` containing the absolute home directory path, for example `/Users/jared` or `/home/jared`; a trailing newline is allowed. The override affects mapping targets only, not where cfgraft finds its own configuration, repositories, or state. Other relative paths, `~user`, `$HOME`, and other environment variables are not expanded. Destination mapping roots may overlap; for example, `/Users/jared/.config` and `/Users/jared/.config/nvim` can be configured together. Sync succeeds when the mappings produce distinct destination files. If two source files resolve to the same destination—or one resolves to a path that another needs as a directory—sync stops with an error before writing any files.
-
-Source paths are always relative to the repository root and may not escape it.
+Edit `~/.config/cfgraft/config.yaml` to define repositories and mappings. See [Configuration](CONFIG.md) for the file format, examples, and portable home-directory paths.
 
 ## Sync
 
