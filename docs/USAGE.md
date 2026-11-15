@@ -11,7 +11,7 @@ permalink: /usage
 
 ## File Layout
 
-`cfgraft` stores its files under:
+`cfgraft` stores configuration and state under:
 
 ```text
 ~/.config/cfgraft/
@@ -26,7 +26,7 @@ The human-editable configuration file is:
 Repository caches are stored under:
 
 ```text
-~/.config/cfgraft/repos/
+~/.cache/cfgraft/repos/
 ```
 
 Machine-managed sync state is stored separately from config under:
@@ -41,11 +41,11 @@ Each configured source gets its own state file named after the source ID, such a
 ~/.config/cfgraft/state/home.yaml
 ```
 
-Older `~/.config/cfgraft/state.yaml` files are still read for compatibility and are removed after the next successful split-state write. Do not edit state files by hand. Hashes are intentionally kept out of `config.yaml` so the config remains the user-owned source of truth.
+Do not edit state files by hand. Hashes are intentionally kept out of `config.yaml` so the config remains the user-owned source of truth.
 
 ## Commands
 
-Run `cfgraft` without a subcommand to show top-level help, including available subcommands and global environment flags.
+Run `cfgraft` without a subcommand to show top-level help, including available subcommands and the configuration path.
 
 ```text
 cfgraft
@@ -57,6 +57,8 @@ Each subcommand also supports `--help`:
 cfgraft sync --help
 cfgraft diff --help
 cfgraft version --help
+cfgraft config
+cfgraft validate
 ```
 
 Use `sync` and `diff` for scripting and non-interactive workflows:
@@ -86,7 +88,7 @@ cfgraft sync
 4. Check out the configured branch, tag, or commit.
 5. For branch refs, update the cache to the latest remote branch state.
 
-Repository caches under `~/.config/cfgraft/repos/` are disposable application-managed data. Do not use them as workspaces.
+Repository caches under `~/.cache/cfgraft/repos/` are disposable application-managed data. Do not use them as workspaces.
 
 After refresh, `sync` plans destination updates. A destination is safe to overwrite when it does not exist, already matches the repository content, or still matches the last hash recorded in state. If an existing destination has no state entry, or if it has drifted from the last accepted hash, it is a conflict.
 
@@ -100,13 +102,15 @@ If a source or mapping has been removed from `config.yaml`, `sync` prunes the no
 
 `--force` allows repository content to overwrite conflicts.
 
-`--interactive` prompts for each conflict before overwriting. If any conflict is declined, sync stops without writing.
-
 `--verbose` shows repository refresh details and no-op decisions.
+
+Boolean flags also accept environment defaults: `CFGRAFT_FORCE`, `CFGRAFT_DRY_RUN`, and `CFGRAFT_VERBOSE`. Values accept Go boolean forms such as `true`, `false`, `1`, and `0`. An explicit flag, including `--force=false`, overrides its environment variable. `CFGRAFT_VERBOSE` applies to both sync and diff.
+
+Run `cfgraft config` for the file format and `cfgraft validate` to check the existing file without writing files or accessing Git. Validation checks YAML fields and paths, not repository availability or mapping contents. A missing config is an error. Other commands create an empty config on first use.
 
 ## Color Output
 
-`cfgraft` uses color and styling for human-readable CLI output. Set `NO_COLOR` to any value to disable colored/styled output:
+`cfgraft` uses color and styling for human-readable CLI output. Set `NO_COLOR` to a nonempty value to disable colored/styled output:
 
 ```text
 NO_COLOR=1 cfgraft sync --dry-run

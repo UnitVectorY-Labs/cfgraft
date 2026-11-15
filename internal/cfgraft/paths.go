@@ -14,8 +14,7 @@ func cfgPaths() (Paths, error) {
 	return Paths{
 		Base:     base,
 		Config:   filepath.Join(base, configFileName),
-		Repos:    filepath.Join(base, "repos"),
-		State:    filepath.Join(base, stateFileName),
+		Repos:    filepath.Join(home, ".cache", "cfgraft", "repos"),
 		StateDir: filepath.Join(base, stateDirName),
 	}, nil
 }

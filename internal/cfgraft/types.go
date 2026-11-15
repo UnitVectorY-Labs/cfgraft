@@ -4,7 +4,6 @@ import "io/fs"
 
 const (
 	configFileName = "config.yaml"
-	stateFileName  = "state.yaml"
 	stateDirName   = "state"
 )
 
@@ -46,16 +45,14 @@ type Paths struct {
 	Base     string
 	Config   string
 	Repos    string
-	State    string
 	StateDir string
 }
 
 type SyncOptions struct {
-	Force       bool
-	Interactive bool
-	DryRun      bool
-	Verbose     bool
-	Refresh     bool
+	Force   bool
+	DryRun  bool
+	Verbose bool
+	Refresh bool
 }
 
 type PlannedOp struct {

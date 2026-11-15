@@ -14,14 +14,6 @@ func loadState(paths Paths) (State, error) {
 	var state State
 	byKey := make(map[string]StateFile)
 
-	legacy, err := readStateFile(paths.State)
-	if err != nil {
-		return state, err
-	}
-	for _, f := range legacy.Files {
-		byKey[stateKey(f.SourceID, f.Source, f.Target)] = f
-	}
-
 	entries, err := os.ReadDir(paths.StateDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return stateFromMap(byKey), nil
@@ -91,9 +83,6 @@ func writeState(paths Paths, state State) error {
 		if err := os.Remove(filepath.Join(paths.StateDir, entry.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-	}
-	if err := os.Remove(paths.State); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
 	return nil
 }
