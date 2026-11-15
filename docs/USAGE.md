@@ -86,16 +86,16 @@ sources:
       name: main
     mappings:
       - source: zsh/zshrc
-        target: /Users/jared/.zshrc
+        target: ~/.zshrc
       - source: nvim
-        target: /Users/jared/.config/nvim
+        target: ~/.config/nvim
 ```
 
 Each source has a repository URL, a ref, and one or more mappings. Ref types are `branch`, `tag`, or `commit`.
 
 When sources are added through the TUI, the source ID is derived from the repository URL. For example, `git@github.com:example/dotfiles.git` becomes `dotfiles`. If that ID already exists, `cfgraft` appends a numeric suffix.
 
-Targets must be absolute paths. `cfgraft` does not expand `~`, `$HOME`, or other environment variables in target paths. Destination mapping roots may overlap; for example, `/Users/jared/.config` and `/Users/jared/.config/nvim` can be configured together. The TUI warns about the overlap, and sync succeeds when the mappings produce distinct destination files. If two source files resolve to the same destination—or one resolves to a path that another needs as a directory—sync stops with an error before writing any files.
+Targets must be absolute paths or start with `~/` (or be `~` alone). `~` expands to the current user’s home directory by default. To override it, create `~/.config/cfgraft/home` containing the absolute home directory path, for example `/Users/jared` or `/home/jared`; a trailing newline is allowed. The override affects mapping targets only, not where cfgraft finds its own configuration, repositories, or state. Other relative paths, `~user`, `$HOME`, and other environment variables are not expanded. The `~` form is retained when the TUI saves the configuration, so the same config can be shared across machines. Destination mapping roots may overlap; for example, `/Users/jared/.config` and `/Users/jared/.config/nvim` can be configured together. The TUI warns about the overlap, and sync succeeds when the mappings produce distinct destination files. If two source files resolve to the same destination—or one resolves to a path that another needs as a directory—sync stops with an error before writing any files.
 
 Source paths are always relative to the repository root and may not escape it.
 

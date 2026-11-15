@@ -72,8 +72,8 @@ func validateConfig(cfg Config, paths Paths) error {
 			if filepath.IsAbs(cleanSource) || cleanSource == ".." || strings.HasPrefix(cleanSource, ".."+string(filepath.Separator)) {
 				return fmt.Errorf("source %q mapping source %q escapes repository root", id, m.Source)
 			}
-			if !filepath.IsAbs(m.Target) {
-				return fmt.Errorf("source %q mapping target %q is not absolute", id, m.Target)
+			if _, err := resolveTarget(paths, m.Target); err != nil {
+				return fmt.Errorf("source %q mapping target %q: %w", id, m.Target, err)
 			}
 		}
 	}
@@ -101,4 +101,48 @@ func destinationOverlapWarnings(cfg Config) []string {
 		}
 	}
 	return warnings
+}
+
+// resolveTarget expands only a leading home-directory marker. The configuration
+// remains unexpanded so it can be shared and edited across machines.
+func resolveTarget(paths Paths, target string) (string, error) {
+	if filepath.IsAbs(target) {
+		return filepath.Clean(target), nil
+	}
+	if target != "~" && !strings.HasPrefix(target, "~/") {
+		return "", errors.New("is not absolute or a home path")
+	}
+	homeFile := filepath.Join(paths.Base, "home")
+	data, err := os.ReadFile(homeFile)
+	var home string
+	if errors.Is(err, os.ErrNotExist) {
+		home, err = os.UserHomeDir()
+	} else if err == nil {
+		home = strings.TrimSpace(string(data))
+	}
+	if err != nil {
+		return "", fmt.Errorf("read home directory from %s: %w", homeFile, err)
+	}
+	if !filepath.IsAbs(home) {
+		return "", fmt.Errorf("home directory %q must be absolute (configured in %s)", home, homeFile)
+	}
+	if target == "~" {
+		return filepath.Clean(home), nil
+	}
+	return filepath.Join(home, target[2:]), nil
+}
+
+func resolveConfigTargets(paths Paths, cfg Config) (Config, error) {
+	resolved := cloneConfig(cfg)
+	for id, src := range resolved.Sources {
+		for i := range src.Mappings {
+			target, err := resolveTarget(paths, src.Mappings[i].Target)
+			if err != nil {
+				return Config{}, fmt.Errorf("source %q mapping target %q: %w", id, src.Mappings[i].Target, err)
+			}
+			src.Mappings[i].Target = target
+		}
+		resolved.Sources[id] = src
+	}
+	return resolved, nil
 }

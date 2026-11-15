@@ -888,7 +888,7 @@ func (m tuiModel) View() tea.View {
 	fmt.Fprintln(&b, m.headerView())
 	if m.err != nil {
 		fmt.Fprintf(&b, "%s %v\n", styled(errorStyle, "error:"), m.err)
-	} else if warnings := destinationOverlapWarnings(m.config); len(warnings) > 0 {
+	} else if warnings := m.destinationOverlapWarnings(m.config); len(warnings) > 0 {
 		for _, warning := range warnings {
 			fmt.Fprintln(&b, wrappedWarning(warning, m.contentWidth()))
 		}
@@ -1027,7 +1027,7 @@ func (m tuiModel) viewForm(b *strings.Builder) {
 					m.writeSuggestions(b, field)
 				}
 			case 1:
-				if missing := missingParentDirs(field.Input.Value()); len(missing) > 0 {
+				if missing := m.missingTargetParents(field.Input.Value()); len(missing) > 0 {
 					fmt.Fprintf(b, "  %s %s\n", styled(warningStyle, "[!]"), "missing parent folders will require confirmation")
 				}
 				if i == m.formCursor {
@@ -1530,7 +1530,12 @@ func (m *tuiModel) submitMappingForm(confirmedParents bool) tea.Cmd {
 		m.err = err
 		return nil
 	}
-	if missing := missingParentDirs(targetPath); len(missing) > 0 && !confirmedParents {
+	resolvedTarget, err := resolveTarget(m.paths, targetPath)
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	if missing := missingParentDirs(resolvedTarget); len(missing) > 0 && !confirmedParents {
 		m.pendingParents = missing
 		m.pendingFormKind = m.formKind
 		m.formTitle = "Create missing parent folders?"
@@ -1563,7 +1568,7 @@ func (m *tuiModel) submitMappingForm(confirmedParents bool) tea.Cmd {
 	}
 	m.config = next
 	m.err = nil
-	if warnings := destinationOverlapWarnings(next); len(warnings) > 0 {
+	if warnings := m.destinationOverlapWarnings(next); len(warnings) > 0 {
 		m.msg = "saved mapping with destination overlap warning"
 	} else {
 		m.msg = "saved mapping"
@@ -1764,7 +1769,12 @@ func (m tuiModel) selectedMappingStateFiles() ([]StateFile, State, error) {
 	if err != nil {
 		return nil, State{}, err
 	}
-	files, next := removeMappingFromState(state, m.selectedSource, mappings[m.selectedMap])
+	mapping := mappings[m.selectedMap]
+	mapping.Target, err = resolveTarget(m.paths, mapping.Target)
+	if err != nil {
+		return nil, State{}, err
+	}
+	files, next := removeMappingFromState(state, m.selectedSource, mapping)
 	return files, next, nil
 }
 
@@ -2293,11 +2303,27 @@ func (m tuiModel) formFieldStartRows() []int {
 			if i == m.formCursor && field.Input.Focused() {
 				row += max(1, min(6, len(m.activePathSuggestions())))
 			}
-			if i == 1 && len(missingParentDirs(field.Input.Value())) > 0 {
+			if i == 1 && len(m.missingTargetParents(field.Input.Value())) > 0 {
 				row++
 			}
 		}
 		row++
 	}
 	return starts
+}
+
+func (m tuiModel) destinationOverlapWarnings(cfg Config) []string {
+	resolved, err := resolveConfigTargets(m.paths, cfg)
+	if err != nil {
+		return nil
+	}
+	return destinationOverlapWarnings(resolved)
+}
+
+func (m tuiModel) missingTargetParents(target string) []string {
+	resolved, err := resolveTarget(m.paths, strings.TrimSpace(target))
+	if err != nil {
+		return nil
+	}
+	return missingParentDirs(resolved)
 }

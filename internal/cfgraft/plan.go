@@ -18,6 +18,15 @@ func buildPlan(paths Paths, cfg Config, state State, opts SyncOptions) (Plan, St
 
 func buildPlanWithReference(paths Paths, activeCfg, referenceCfg Config, state State, opts SyncOptions) (Plan, State, error) {
 	var plan Plan
+	var err error
+	activeCfg, err = resolveConfigTargets(paths, activeCfg)
+	if err != nil {
+		return plan, State{}, err
+	}
+	referenceCfg, err = resolveConfigTargets(paths, referenceCfg)
+	if err != nil {
+		return plan, State{}, err
+	}
 	stateByKey := make(map[string]StateFile)
 	active := make(map[string]bool)
 	nextKeys := make(map[string]bool)
