@@ -3,7 +3,7 @@ module github.com/UnitVectorY-Labs/cfgraft
 go 1.27.0 // GOVERSION
 
 require (
-	charm.land/lipgloss/v2 v2.0.6
+	charm.land/lipgloss/v2 v2.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
