@@ -31,7 +31,7 @@ Replace the repository URL, ref, and paths with your own. This example maps two 
 
 ## Fields
 
-- `sources` is a mapping from a nonempty source ID, such as `dotfiles`, to its settings. An empty configuration can use `sources: {}`.
+- `sources` is a mapping from a nonempty source ID, such as `dotfiles`, to its settings. An empty configuration can use `sources:` with no entries.
 - `repo` is the Git repository URL used to clone or refresh the source.
 - `ref.type` is `branch`, `tag`, or `commit`; `ref.name` is the corresponding branch name, tag name, or commit identifier.
 - `mappings` is a list of files or directories to synchronize. Each entry has a `source` and a `target`.
@@ -50,10 +50,16 @@ Use a `condition` to share the same config across machines while selecting sourc
 sources:
   dotfiles:
     repo: https://example.com/dotfiles.git
-    ref: {type: branch, name: main}
+    ref:
+      type: branch
+      name: main
     mappings:
-      - {source: mac/app.conf, target: ~/.config/app.conf, condition: mac}
-      - {source: linux/app.conf, target: ~/.config/app.conf, condition: linux}
+      - source: mac/app.conf
+        target: ~/.config/app.conf
+        condition: mac
+      - source: linux/app.conf
+        target: ~/.config/app.conf
+        condition: linux
 ```
 
 On a Mac, run `touch ~/.config/cfgraft/condition-mac`; on Linux, create `~/.config/cfgraft/condition-linux` instead. Create the directory first if needed. Remove a marker to disable its entries. The marker must be a regular file; its contents are ignored. Condition names must begin with an ASCII letter or digit and contain only ASCII letters, digits, underscores, and hyphens. Names are case-sensitive. Markers live beside `config.yaml` under the current user's home, independent of the mapping home override.
