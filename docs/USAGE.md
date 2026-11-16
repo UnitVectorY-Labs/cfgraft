@@ -100,7 +100,9 @@ If a source or mapping has been removed from `config.yaml`, `sync` prunes the no
 
 `--dry-run` performs the full planning path, including repository refresh, but does not write destination files, delete files, or update state.
 
-`--force` allows repository content to overwrite conflicts.
+`--force` allows repository content to overwrite conflicts. An existing destination that differs from the source and has no recorded state is reported as not managed by cfgraft yet. Use `cfgraft sync --dry-run --force` to preview overwriting it and beginning to manage it, then `cfgraft sync --force` to apply that plan. Existing files that already match the source can be accepted into state without `--force`.
+
+Dry-run output distinguishes blocked conflicts (with the command needed to resolve them) from forced overwrites or deletions. Both dry-run modes leave destination files and state unchanged and print the next command to preview conflict resolution or apply the plan. Sync flags require the `sync` subcommand: use `cfgraft sync --dry-run`, rather than `cfgraft --dry-run`.
 
 `--verbose` shows repository refresh details and no-op decisions.
 
@@ -148,7 +150,7 @@ Text files are shown with a unified-style diff. Binary files are reported withou
 changed  /Users/jared/.local/bin/tool  binary files differ
 ```
 
-With `--verbose`, `diff` also reports safety information for conflicts, such as local drift from the last accepted state.
+`diff` always reports conflicts and the command needed to resolve them, including existing files that are not managed yet and files that drifted from the last accepted state. These warnings appear before text or binary differences, without requiring `--verbose`. Diff does not accept files into managed state.
 
 ## Binary Files
 

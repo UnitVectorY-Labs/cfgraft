@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+const unmanagedDestinationReason = "destination is not managed by cfgraft yet and differs from source"
+
 func buildPlan(paths Paths, cfg Config, state State, opts SyncOptions) (Plan, State, error) {
 	return buildPlanWithReference(paths, cfg, cfg, state, opts)
 }
@@ -146,7 +148,7 @@ func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, s
 		addStateFile(next, nextKeys, record)
 	case !hadState:
 		op.Kind = "conflict"
-		op.Reason = "existing destination has no state entry"
+		op.Reason = unmanagedDestinationReason
 		plan.Conflicts = append(plan.Conflicts, op)
 		addStateFile(next, nextKeys, record)
 	case currentHash != prev.Hash:

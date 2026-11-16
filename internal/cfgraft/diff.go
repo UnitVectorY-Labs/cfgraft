@@ -33,15 +33,18 @@ func diffCommand(verbose bool, out io.Writer) error {
 			continue
 		}
 		changed++
+		if op.Kind == "conflict" {
+			fmt.Fprintf(out, "%s %s  %s\n", planLabel("conflict", errorStyle), op.Target, styled(errorStyle, conflictReason(op)))
+			if op.SourceAbs == "" {
+				continue
+			}
+		}
 		if binaryFilesDiffer(op.SourceAbs, op.Target) {
 			fmt.Fprintf(out, "%s %s  %s\n", styled(actionStyle, "changed "), op.Target, styled(subtleStyle, "binary files differ"))
 			continue
 		}
 		if err := printUnifiedDiff(op.SourceAbs, op.Target, out); err != nil {
 			return err
-		}
-		if verbose && op.Kind == "conflict" {
-			fmt.Fprintf(out, "%s %s  %s\n", styled(warningStyle, "safety  "), op.Target, styled(warningStyle, op.Reason))
 		}
 	}
 	for _, op := range plan.Ops {
@@ -87,15 +90,18 @@ func diffSourceCommand(sourceID string, verbose bool, out io.Writer) error {
 			continue
 		}
 		changed++
+		if op.Kind == "conflict" {
+			fmt.Fprintf(out, "%s %s  %s\n", planLabel("conflict", errorStyle), op.Target, styled(errorStyle, conflictReason(op)))
+			if op.SourceAbs == "" {
+				continue
+			}
+		}
 		if binaryFilesDiffer(op.SourceAbs, op.Target) {
 			fmt.Fprintf(out, "%s %s  %s\n", styled(actionStyle, "changed "), op.Target, styled(subtleStyle, "binary files differ"))
 			continue
 		}
 		if err := printUnifiedDiff(op.SourceAbs, op.Target, out); err != nil {
 			return err
-		}
-		if verbose && op.Kind == "conflict" {
-			fmt.Fprintf(out, "%s %s  %s\n", styled(warningStyle, "safety  "), op.Target, styled(warningStyle, op.Reason))
 		}
 	}
 	for _, op := range plan.Ops {

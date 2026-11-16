@@ -559,3 +559,111 @@ func TestValidateListsSourcesAndResolvedMappings(t *testing.T) {
 		t.Fatalf("sources not sorted: %s", got)
 	}
 }
+
+func TestUnmanagedDestinationGuidance(t *testing.T) {
+	for _, binary := range []bool{false, true} {
+		name := "text"
+		if binary {
+			name = "binary"
+		}
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			target := filepath.Join(home, "existing")
+			paths := writeCachedConfigForTest(t, home, Config{Sources: map[string]Source{
+				"home": {Repo: "https://example.invalid/home.git", Ref: Ref{Type: "branch", Name: "main"}, LocalID: "home-repo", Mappings: []Mapping{{Source: "file", Target: target}}},
+			}})
+			source, local := "repository\n", "local\n"
+			if binary {
+				source, local = "repository\x00", "local\x00"
+			}
+			writeCacheFile(t, paths, "home-repo", "file", source)
+			if err := os.WriteFile(target, []byte(local), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, sourceOnly := range []bool{false, true} {
+				var out bytes.Buffer
+				var err error
+				if sourceOnly {
+					err = diffSourceCommand("home", false, &out)
+				} else {
+					err = diffCommand(false, &out)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				requireOutput(t, out.String(), target, "not managed by cfgraft yet", "cfgraft sync --force", "overwrite with source content", "begin managing this file")
+				if binary {
+					requireOutput(t, out.String(), "binary files differ")
+				} else {
+					requireOutput(t, out.String(), "-local", "+repository")
+				}
+				for _, force := range []bool{false, true} {
+					out.Reset()
+					opts := SyncOptions{DryRun: true, Force: force}
+					if sourceOnly {
+						err = syncSourceCommand("home", opts, &out)
+					} else {
+						err = syncCommand(opts, &out)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					requireOutput(t, out.String(), "not managed by cfgraft yet", "overwrite with source content", "begin managing this file", "dry-run: no destination files or state were changed")
+					if force {
+						requireOutput(t, out.String(), "force", "--force will overwrite", "next: apply with cfgraft sync --force")
+						if strings.Contains(out.String(), "conflict") {
+							t.Fatalf("forced preview still reported blocked conflict: %s", &out)
+						}
+					} else {
+						requireOutput(t, out.String(), "conflict", "cfgraft sync --force", "cfgraft sync --dry-run --force")
+					}
+					assertFile(t, target, local)
+					state, err := loadState(paths)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(state.Files) != 0 {
+						t.Fatalf("preview adopted file: %#v", state)
+					}
+				}
+			}
+			var out bytes.Buffer
+			if err := syncCommand(SyncOptions{}, &out); err == nil {
+				t.Fatal("unmanaged destination overwritten without force")
+			}
+			assertFile(t, target, local)
+			if err := syncCommand(SyncOptions{Force: true}, &out); err != nil {
+				t.Fatal(err)
+			}
+			assertFile(t, target, source)
+			state, err := loadState(paths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(state.Files) != 1 || state.Files[0].Target != target {
+				t.Fatalf("forced sync did not adopt destination: %#v", state)
+			}
+		})
+	}
+}
+
+func TestRootFlagsSuggestSyncCommand(t *testing.T) {
+	for _, args := range [][]string{{"--dry-run"}, {"--dry-run", "--force"}} {
+		var out bytes.Buffer
+		err := Run(args, &out, &out, "dev")
+		if err == nil {
+			t.Fatal("expected missing subcommand error")
+		}
+		requireOutput(t, err.Error(), "flags require a subcommand", "cfgraft sync "+strings.Join(args, " "))
+	}
+}
+
+func requireOutput(t *testing.T, output string, fragments ...string) {
+	t.Helper()
+	for _, fragment := range fragments {
+		if !strings.Contains(output, fragment) {
+			t.Fatalf("expected %q in output:\n%s", fragment, output)
+		}
+	}
+}
