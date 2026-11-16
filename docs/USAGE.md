@@ -96,6 +96,22 @@ Successful writes update the source-specific state file with the content hash th
 
 If a source or mapping has been removed from `config.yaml`, `sync` prunes the no-longer-referenced state entries. This state cleanup does not delete destination files; remove unwanted destination files manually.
 
+## Managing cfgraft's Own Configuration
+
+A mapping can manage `~/.config/cfgraft/config.yaml` itself:
+
+```yaml
+mappings:
+  - source: .config/cfgraft/config.yaml
+    target: ~/.config/cfgraft/config.yaml
+```
+
+When sync would replace its own configuration, it validates the replacement and plans using its enabled sources and mappings before writing destinations or state. Newly referenced repositories are refreshed, new mappings are synchronized, and state for removed mappings is pruned in the same invocation. Files belonging to removed mappings are preserved. An additional sync is not required to activate the replacement configuration.
+
+The existing safety checks still apply. A differing, unmanaged config requires `cfgraft sync --force`; a managed config that still matches its recorded state can update without force. Conflicts introduced by the replacement configuration also require force. `cfgraft sync --dry-run --force` previews the replacement and its mappings without writing destination files or state.
+
+Sync reports `planning with updated configuration` when it follows a replacement. Invalid replacements, configuration cycles, and chains exceeding 16 updates fail before any destination or state writes. Removing the self-management mapping installs the accepted replacement and stops tracking it. Sync refuses to delete its active configuration when a directory mapping's config source disappears; restore the source file or remove that mapping.
+
 ## Sync Flags
 
 `--dry-run` performs the full planning path, including repository refresh, but does not write destination files, delete files, or update state.

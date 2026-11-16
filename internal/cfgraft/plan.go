@@ -1,6 +1,7 @@
 package cfgraft
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -335,9 +336,15 @@ func applyOp(op PlannedOp) error {
 		if err := os.MkdirAll(filepath.Dir(op.Target), 0o755); err != nil {
 			return err
 		}
-		src, err := os.Open(op.SourceAbs)
-		if err != nil {
-			return err
+		var src io.ReadCloser
+		if op.Content != nil {
+			src = io.NopCloser(bytes.NewReader(op.Content))
+		} else {
+			var err error
+			src, err = os.Open(op.SourceAbs)
+			if err != nil {
+				return err
+			}
 		}
 		defer src.Close()
 		tmp := op.Target + ".cfgraft.tmp"
