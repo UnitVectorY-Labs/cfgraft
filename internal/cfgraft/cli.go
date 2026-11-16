@@ -119,13 +119,26 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 		sort.Strings(ids)
 		for _, id := range ids {
 			src := cfg.Sources[id]
-			fmt.Fprintf(stdout, "%s %s  %s  %s:%s\n", styled(actionStyle, "source  "), id, src.Repo, src.Ref.Type, src.Ref.Name)
+			enabled, err := conditionEnabled(paths, src.Condition)
+			if err != nil {
+				return err
+			}
+			status := conditionStatus(src.Condition, enabled)
+			fmt.Fprintf(stdout, "%s %s  %s  %s:%s%s\n", styled(actionStyle, "source  "), id, src.Repo, src.Ref.Type, src.Ref.Name, status)
 			for _, mapping := range src.Mappings {
 				target, err := resolveTarget(paths, mapping.Target)
 				if err != nil {
 					return err
 				}
-				fmt.Fprintf(stdout, "%s %s:%s -> %s\n", styled(actionStyle, "mapping "), id, mapping.Source, target)
+				mappingEnabled, err := conditionEnabled(paths, mapping.Condition)
+				if err != nil {
+					return err
+				}
+				status := conditionStatus(mapping.Condition, mappingEnabled)
+				if !enabled {
+					status += " [source disabled]"
+				}
+				fmt.Fprintf(stdout, "%s %s:%s -> %s%s\n", styled(actionStyle, "mapping "), id, mapping.Source, target, status)
 			}
 		}
 		return nil
@@ -142,6 +155,16 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 	default:
 		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
+}
+func conditionStatus(name string, enabled bool) string {
+	if name == "" {
+		return ""
+	}
+	status := "disabled"
+	if enabled {
+		status = "enabled"
+	}
+	return fmt.Sprintf(" [condition %s: %s]", name, status)
 }
 func wantsHelp(args []string) bool {
 	for _, arg := range args {
@@ -170,4 +193,5 @@ func printCommandHelp(w io.Writer, name string) {
 }
 func printConfigHelp(w io.Writer) {
 	fmt.Fprintf(w, "Configuration is hand-edited YAML. Run cfgraft validate to check it.\n\n%s\n  sources:                 # source ID -> settings\n    dotfiles:\n      repo: https://example.com/dotfiles.git\n      ref:\n        type: branch       # branch, tag, or commit\n        name: main\n      # local_id: dotfiles # optional cache path relative to repos directory\n      mappings:\n        - source: shell/zshrc # relative to repository root; . means root\n          target: ~/.zshrc    # absolute path or ~/ path\n\nTargets may also be \"~\" (quoted). ~/.config/cfgraft/home may contain an\nabsolute home override for targets. See docs/CONFIG.md for details.\n", heading("Format:"))
+	fmt.Fprintln(w, "\nA source or mapping may set condition: NAME. It is enabled only when\n~/.config/cfgraft/condition-NAME is a regular file. Omit condition to enable\nit by default. Names use letters, digits, underscores, and hyphens and must\nstart with a letter or digit. Run cfgraft validate to see condition status.")
 }

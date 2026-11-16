@@ -10,9 +10,10 @@ func cloneConfig(cfg Config) Config {
 	next := Config{Sources: make(map[string]Source, len(cfg.Sources))}
 	for id, src := range cfg.Sources {
 		copied := Source{
-			Repo:    src.Repo,
-			Ref:     src.Ref,
-			LocalID: src.LocalID,
+			Repo:      src.Repo,
+			Condition: src.Condition,
+			Ref:       src.Ref,
+			LocalID:   src.LocalID,
 		}
 		if len(src.Mappings) > 0 {
 			copied.Mappings = append([]Mapping(nil), src.Mappings...)
