@@ -6,12 +6,10 @@ on:
     branches: ["main"]
     paths:
       - ".github/**"
-      - ".zizmor.yml"
   pull_request:
     branches: ["**"]
     paths:
       - ".github/**"
-      - ".zizmor.yml"
   schedule:
     - cron: "0 10 * * 6"
 
