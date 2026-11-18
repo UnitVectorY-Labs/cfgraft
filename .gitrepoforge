@@ -1,7 +1,7 @@
 name: cfgraft
 default_branch: main
 config:
-  description: "A small Unix-style TUI and CLI for safely syncing files and directories from Git repositories into local configuration paths."
+  description: "A small Unix-style CLI for safely syncing files and directories from Git repositories into local configuration paths."
   license: MIT
   language: go
   release: release-go

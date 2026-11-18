@@ -2,6 +2,6 @@
 
 # cfgraft
 
-A small Unix-style TUI and CLI for safely syncing files and directories from Git repositories into local configuration paths.
+A small Unix-style CLI for safely syncing files and directories from Git repositories into local configuration paths.
 
 See the [configuration guide](docs/CONFIG.md) to set up sources and mappings, and [usage](docs/USAGE.md) for commands and safety behavior.
