@@ -153,7 +153,10 @@ func Run(args []string, stdout, stderr io.Writer, version string) error {
 		fmt.Fprintln(stdout, VersionString(version))
 		return nil
 	default:
-		return fmt.Errorf("unknown subcommand %q", args[0])
+		if strings.HasPrefix(args[0], "-") {
+			return fmt.Errorf("flags require a subcommand; use cfgraft sync %s", strings.Join(args, " "))
+		}
+		return fmt.Errorf("unknown subcommand %q; run cfgraft help for available commands", args[0])
 	}
 }
 func conditionStatus(name string, enabled bool) string {
@@ -187,7 +190,7 @@ func printCommandHelp(w io.Writer, name string) {
 	if name == "sync" {
 		fmt.Fprintf(w, "Refresh repositories and synchronize configured mappings.\n\n%s\n  cfgraft sync [flags]\n\n%s\n  --force      overwrite conflicts                  CFGRAFT_FORCE\n  --dry-run    plan without writing files or state  CFGRAFT_DRY_RUN\n  --verbose    show extra detail                    CFGRAFT_VERBOSE\n", heading("Usage:"), heading("Flags (environment variable):"))
 	} else {
-		fmt.Fprintf(w, "Compare cached sources with local destinations.\n\n%s\n  cfgraft diff [flags]\n\n%s\n  --verbose    show safety information             CFGRAFT_VERBOSE\n", heading("Usage:"), heading("Flags (environment variable):"))
+		fmt.Fprintf(w, "Compare cached sources with local destinations.\n\n%s\n  cfgraft diff [flags]\n\n%s\n  --verbose    show extra detail                   CFGRAFT_VERBOSE\n", heading("Usage:"), heading("Flags (environment variable):"))
 	}
 	fmt.Fprintln(w, "\nBoolean environment values accept true or false; flags take precedence.")
 }

@@ -1,6 +1,7 @@
 package cfgraft
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+const unmanagedDestinationReason = "destination is not managed by cfgraft yet and differs from source"
 
 func buildPlan(paths Paths, cfg Config, state State, opts SyncOptions) (Plan, State, error) {
 	return buildPlanWithReference(paths, cfg, cfg, state, opts)
@@ -146,7 +149,7 @@ func planFile(sourceAbs, sourceID, sourceRel, target string, info fs.FileInfo, s
 		addStateFile(next, nextKeys, record)
 	case !hadState:
 		op.Kind = "conflict"
-		op.Reason = "existing destination has no state entry"
+		op.Reason = unmanagedDestinationReason
 		plan.Conflicts = append(plan.Conflicts, op)
 		addStateFile(next, nextKeys, record)
 	case currentHash != prev.Hash:
@@ -333,9 +336,15 @@ func applyOp(op PlannedOp) error {
 		if err := os.MkdirAll(filepath.Dir(op.Target), 0o755); err != nil {
 			return err
 		}
-		src, err := os.Open(op.SourceAbs)
-		if err != nil {
-			return err
+		var src io.ReadCloser
+		if op.Content != nil {
+			src = io.NopCloser(bytes.NewReader(op.Content))
+		} else {
+			var err error
+			src, err = os.Open(op.SourceAbs)
+			if err != nil {
+				return err
+			}
 		}
 		defer src.Close()
 		tmp := op.Target + ".cfgraft.tmp"

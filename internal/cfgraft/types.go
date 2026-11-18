@@ -58,6 +58,7 @@ type SyncOptions struct {
 }
 
 type PlannedOp struct {
+	Content   []byte // Optional snapshot for self-managed configuration writes.
 	Kind      string
 	SourceID  string
 	SourceRel string
